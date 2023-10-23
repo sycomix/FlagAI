@@ -57,14 +57,10 @@ def read_file():
 
     with open(src_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            src.append(line.strip('\n').lower())
-
+        src.extend(line.strip('\n').lower() for line in lines)
     with open(tgt_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            tgt.append(line.strip('\n').lower())
-
+        tgt.extend(line.strip('\n').lower() for line in lines)
     return src, tgt
 
     
@@ -84,12 +80,7 @@ if __name__ == "__main__":
         """
         
         for i in range(len(src)):
-            sample = {
-                "__key__": str(i),
-                "src": src[i],
-                "tgt": tgt[i]
-            }
-            yield sample
+            yield {"__key__": str(i), "src": src[i], "tgt": tgt[i]}
 
     make_wds_shards(
         pattern=f"{output_path}/%06d.tar",

@@ -1,7 +1,7 @@
 # Copyright © 2022 BAAI. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License")
-import torch 
+import torch
 from flagai.trainer import Trainer
 from flagai.model.glm_model import GLMForSeq2Seq
 from flagai.data.tokenizer import Tokenizer
@@ -19,11 +19,7 @@ cl_args = Seq2SeqCollateArguments()
 
 print("downloading...")
 
-if task_name in CH_TASKS:
-    model_name = 'GLM-large-ch'
-else:
-    model_name = 'GLM-large-en'
-
+model_name = 'GLM-large-ch' if task_name in CH_TASKS else 'GLM-large-en'
 tokenizer = Tokenizer.from_pretrained(model_name)
 
 train_dataset = Seq2SeqDataset(task_name=task_name,

@@ -96,13 +96,12 @@ class DreamBoothDataset(Dataset):
         return self._length
 
     def __getitem__(self, index):
-        example = {}
         path = self.instance_images_path[index % self.num_instance_images]
         instance_image = Image.open(path)
-        if not instance_image.mode == "RGB":
+        if instance_image.mode != "RGB":
             instance_image = instance_image.convert("RGB")
-            
-        example["instance_images"] = self.image_transforms(instance_image)
+
+        example = {"instance_images": self.image_transforms(instance_image)}
         example["instance_prompt_ids"] = self.tokenizer(
             self.instance_prompt,
             padding="do_not_pad",
@@ -114,7 +113,7 @@ class DreamBoothDataset(Dataset):
 
         if self.class_data_root:
             class_image = Image.open(self.class_images_path[index % self.num_class_images])
-            if not class_image.mode == "RGB":
+            if class_image.mode != "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
             example["class_prompt_ids"] = self.tokenizer(
@@ -152,12 +151,11 @@ def collate_fn(examples):
 
     input_ids = tokenizer.pad({"input_ids": input_ids}, padding=True, return_tensors="pt").input_ids
 
-    batch = {
+    return {
         "input_ids": input_ids,
         "pixel_values": pixel_values,
         "caption": captions,
     }
-    return batch
 
 train_dataloader = torch.utils.data.DataLoader(
     train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn
@@ -184,7 +182,7 @@ optimizer = optimizer_class(
 )
 
 model.to(device)
-for epoch in range(num_train_epochs):
+for _ in range(num_train_epochs):
     unet.train()
     if train_text_encoder:
         text_encoder.train()
@@ -203,7 +201,7 @@ for epoch in range(num_train_epochs):
         else:
             loss, _ = model(x, c)
 
-        print('*'*20, "loss=", str(loss.detach().item()))
+        print('*'*20, "loss=", loss.detach().item())
 
         loss.backward()
         optimizer.step()

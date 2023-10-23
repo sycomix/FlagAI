@@ -11,7 +11,7 @@ from flagai.data.collate_utils import seq2seq_collate_fn as title_generation_col
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-train_path = cur_dir + "/data/news.tsv"
+train_path = f"{cur_dir}/data/news.tsv"
 # single gpu
 trainer = Trainer(
     env_type="pytorch",
@@ -83,11 +83,10 @@ class BertTitleGenerationDataset(Dataset):
                                           tgt,
                                           max_length=self.maxlen,
                                           truncation=True)
-        output = {
+        return {
             "input_ids": data["input_ids"],
             "segment_ids": data["token_type_ids"],
         }
-        return output
 
     def __len__(self):
 

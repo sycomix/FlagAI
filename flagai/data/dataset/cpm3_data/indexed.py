@@ -25,11 +25,11 @@ def code(dtype):
 
 
 def index_file_path(prefix_path):
-    return prefix_path + '.idx'
+    return f'{prefix_path}.idx'
 
 
 def data_file_path(prefix_path):
-    return prefix_path + '.bin'
+    return f'{prefix_path}.bin'
 
 
 class MMapIndexedDataset(torch.utils.data.Dataset):
@@ -120,11 +120,11 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
-            assert idx < len(self._index), "Index {} out of range: {}".format(idx, len(self._index))
+            assert idx < len(self._index), f"Index {idx} out of range: {len(self._index)}"
             ptr, size = self._index[idx]
-            np_array = np.frombuffer(self._bin_buffer, dtype=self._index.dtype,
-                                     count=size, offset=ptr)
-            return np_array
+            return np.frombuffer(
+                self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr
+            )
         elif isinstance(idx, slice):
             start, stop, step = idx.indices(len(self))
             if step != 1:
@@ -135,14 +135,13 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
             total_size = sum(sizes)
             np_array = np.frombuffer(self._bin_buffer, dtype=self._index.dtype,
                                      count=total_size, offset=ptr)
-            sents = np.split(np_array, offsets[:-1])
-            return sents
+            return np.split(np_array, offsets[:-1])
 
     @property
     def sizes(self):
         return self._index.sizes
         
-    def exists(path):
-        return (
-            os.path.exists(index_file_path(path)) and os.path.exists(data_file_path(path))
+    def exists(self):
+        return os.path.exists(index_file_path(self)) and os.path.exists(
+            data_file_path(self)
         )

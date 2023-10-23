@@ -8,8 +8,8 @@ from flagai.auto_model.auto_loader import AutoLoader
 from flagai.trainer import Trainer
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = cur_dir + '/data/src.txt'
-tgt_dir = cur_dir + '/data/tgt.txt'
+src_dir = f'{cur_dir}/data/src.txt'
+tgt_dir = f'{cur_dir}/data/tgt.txt'
 
 def read_file():
     src = []
@@ -27,8 +27,7 @@ def read_file():
             src.append(line)
 
     with open(tgt_dir, 'r', encoding='utf-8') as f:
-        for line in f:
-            tgt.append(line.strip())
+        tgt.extend(line.strip() for line in f)
     assert len(src) == len(tgt), 'lines not equal!'
     return src, tgt
 
@@ -76,8 +75,7 @@ class BertSeq2seqDataset(Dataset):
     def __getitem__(self, i):
         source_text = self.sents_src[i]
         target_text = self.sents_tgt[i]
-        data = tokenizer.encode_plus(source_text, target_text=target_text)
-        return data
+        return tokenizer.encode_plus(source_text, target_text=target_text)
 
     def __len__(self):
         return len(self.sents_src)
@@ -111,7 +109,7 @@ class GLMPoetryDynamicCollateFN():  #padding process in each batch
         attention_mask = [data['attention_mask'] for data in batch]
         loss_mask = [data['loss_mask'] for data in batch]
 
-        max_length = max([len(t) for t in input_ids])
+        max_length = max(len(t) for t in input_ids)
         for i in range(len(input_ids)):
             input_ids[i] = self.pad_token(input_ids[i], max_length)
             target_ids[i] = self.pad_token(target_ids[i], max_length)

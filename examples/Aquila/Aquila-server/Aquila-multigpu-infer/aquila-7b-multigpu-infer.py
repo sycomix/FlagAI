@@ -47,7 +47,7 @@ def initialize_distributed():
     # Call the init process
     init_method = 'tcp://'
 
-    init_method += master_addr + ':' + master_port
+    init_method += f'{master_addr}:{master_port}'
     torch.distributed.init_process_group(
         backend='nccl',  # gloo
         world_size=world_size,
@@ -59,7 +59,7 @@ initialize_distributed()
 
 set_random_seed(123)
 
-print(f"building model...")
+print("building model...")
 loader = AutoLoader("lm", 
                     model_name="aquila-7b",
                     use_cache=True, 

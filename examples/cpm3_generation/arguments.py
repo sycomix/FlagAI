@@ -111,6 +111,5 @@ def get_args():
     parser = add_model_config_args(parser)
     parser = add_training_args(parser)
     parser = add_inference_args(parser)
-    
-    args = parser.parse_args()
-    return args
+
+    return parser.parse_args()

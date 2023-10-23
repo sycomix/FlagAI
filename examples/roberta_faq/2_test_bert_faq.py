@@ -44,12 +44,8 @@ class Search:
     def search(self, answer, query, k=10):
         query = query.numpy().reshape(-1, self.d)
         D, I = self.index.search(query, k)  # actual search
-        result_question = []
         all_question = list(answer.keys())
-        for s, i in zip(D[0], I[0]):
-            if i != -1:
-                result_question.append([all_question[i], s])
-
+        result_question = [[all_question[i], s] for s, i in zip(D[0], I[0]) if i != -1]
         print(result_question)
         best_quesiton = result_question[0][0]
         print(f"answer is {answer[best_quesiton]}")

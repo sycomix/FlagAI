@@ -103,8 +103,7 @@ class NERDataset(Dataset):
                 for j in range(start + 1, end + 1):
                     labels[j] = target.index(f"I-{label}")
 
-        output = {"input_ids": input_ids, "labels": labels}
-        return output
+        return {"input_ids": input_ids, "labels": labels}
 
     def __len__(self):
         return len(self.data)

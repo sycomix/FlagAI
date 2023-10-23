@@ -26,7 +26,7 @@ trainer = Trainer(env_type="pytorch",
                   save_interval=1)
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-train_path = cur_dir + "/data/train.tsv"
+train_path = f"{cur_dir}/data/train.tsv"
 model_dir = "./checkpoints/"
 maxlen = 256
 
@@ -68,12 +68,11 @@ class BertSemanticMatchDataset(Dataset):
                                      max_length=maxlen,
                                      truncation=True)
 
-        output = {
+        return {
             "input_ids": data["input_ids"],
             "segment_ids": data["token_type_ids"],
-            "labels": tgt
+            "labels": tgt,
         }
-        return output
 
     def __len__(self):
 

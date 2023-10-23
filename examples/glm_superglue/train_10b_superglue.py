@@ -33,7 +33,7 @@ trainer = Trainer(env_type='pytorch',
 model_name = "GLM-large-en"
 model = GLMForSingleTokenCloze.from_pretrain(download_path="./checkpoints",
                                              model_name=model_name)
-                 
+
 tokenizer = Tokenizer.from_pretrained(model_name)
 train_dataset = SuperGlueDataset(task_name=task_name,
                                  data_dir='./datasets/',
@@ -48,7 +48,7 @@ valid_dataset = SuperGlueDataset(task_name=task_name,
 
 cl_args = CollateArguments()
 
-if task_name in ['copa', 'wsc', 'record']:
+if task_name in {'copa', 'wsc', 'record'}:
     cl_args.multi_token = True
 
 from flagai.data.dataset import ConstructSuperglueStrategy

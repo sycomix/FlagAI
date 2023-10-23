@@ -46,9 +46,9 @@ def build_input_from_ids(text_a_ids=None,
     # Cap the size.
     if len(ids) >= max_seq_length - eos_length:
         max_seq_length_m1 = max_seq_length - 1
-        ids = ids[0:max_seq_length_m1]
-        types = types[0:max_seq_length_m1]
-        paddings = paddings[0:max_seq_length_m1]
+        ids = ids[:max_seq_length_m1]
+        types = types[:max_seq_length_m1]
+        paddings = paddings[:max_seq_length_m1]
     end_type = 0 if text_b_ids is None else 1
     if add_eos:
         ids.append(eos_id)
@@ -76,10 +76,10 @@ def build_input_from_ids(text_a_ids=None,
             types.extend([end_type] * (len_answer - 1))
             paddings.extend([1] * (len_answer - 1))
             position_ids.extend([mask_position] * (len_answer - 1))
-            if not args.no_block_position:
-                block_position_ids.extend(range(2, len(answer_ids) + 1))
-            else:
+            if args.no_block_position:
                 block_position_ids.extend([1] * (len(answer_ids) - 1))
+            else:
+                block_position_ids.extend(range(2, len(answer_ids) + 1))
             target_ids.extend(answer_ids)
             loss_masks.extend([1] * len(answer_ids))
         else:

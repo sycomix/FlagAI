@@ -1,7 +1,7 @@
 import argparse
 
 def save_best(best_score, eval_dict):
-    return best_score if best_score < eval_dict['loss'] else eval_dict['loss']
+    return min(best_score, eval_dict['loss'])
 
 def str2bool(v):
     if isinstance(v,bool):

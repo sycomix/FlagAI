@@ -19,7 +19,7 @@ state_dict = "./checkpoints_in"
 model_name = 'aquilachat-7b'
 server_port = 7860
 
-device = f"cuda:0"
+device = "cuda:0"
 print(f"device is {device}")
 
 def predict(tokenizer, model, text,
@@ -155,7 +155,7 @@ def init_flask():
 
     return app
 
-print(f"building model...")
+print("building model...")
 start_time = time.time()
 loader = AutoLoader(
     "lm",

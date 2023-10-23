@@ -114,8 +114,7 @@ max_seq_len = 2048
 def read_file(jsonl_file):
     conversations = []
     with jsonlines.open(jsonl_file) as reader:
-        for line in reader:
-            conversations.append(line)
+        conversations.extend(iter(reader))
     return conversations
 
 
@@ -169,7 +168,7 @@ class ConversationDatasetV2(Dataset):
         chat_desc = source['chat_desc']
         instruction = source['instruction']
         conversations = source['conversations']
-        
+
         # chat_desc
         example = self.tokenizer.encode_plus(f"{chat_desc}", None, max_length=None)['input_ids']
         EOS_TOKEN = example[-1]
@@ -206,11 +205,10 @@ class ConversationDatasetV2(Dataset):
         example = example[:self.maxlen]
         labels = labels[:self.maxlen]
 
-        output = {
+        return {
             "input_ids": example,
             "labels": labels,
         }
-        return output
 
     def __len__(self):
         return len(self.conversations)

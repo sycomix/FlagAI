@@ -85,11 +85,9 @@ def compute_metric(output_filename):
     total_acc = 0
     total_num = 0
     for task in run_results:
-        acc = 0
         pred_answers = run_results[task]['pred_answers']
         gold_answers = run_results[task]['gold_answers']
-        for pred, gold in zip(pred_answers, gold_answers):
-            if pred == gold: acc += 1
+        acc = sum(1 for pred, gold in zip(pred_answers, gold_answers) if pred == gold)
         print("ACC-%s: %.4f" % (task, acc/len(gold_answers)))
         total_acc += acc
         total_num += len(gold_answers)
@@ -98,23 +96,20 @@ def compute_metric(output_filename):
 
 def format_subject(subject):
     l = subject.split("_")
-    s = ""
-    for entry in l:
-        s += " " + entry
-    return s
+    return "".join(" " + entry for entry in l)
 
 def format_example(df, idx, include_answer=True):
     prompt = df.iloc[idx, 0]
     k = df.shape[1] - 2
     for j in range(k):
-        prompt += "\n{}. {}".format(choices[j], df.iloc[idx, j+1])
+        prompt += f"\n{choices[j]}. {df.iloc[idx, j + 1]}"
     prompt += "\nAnswer:"
     if include_answer:
-        prompt += " {}\n\n".format(df.iloc[idx, k + 1])
+        prompt += f" {df.iloc[idx, k + 1]}\n\n"
     return prompt
 
 def gen_prompt(train_df, subject, k=-1):
-    prompt = "The following are multiple choice questions (with answers) about {}.\n\n".format(format_subject(subject))
+    prompt = f"The following are multiple choice questions (with answers) about {format_subject(subject)}.\n\n"
     if k == -1:
         k = train_df.shape[0]
     for i in range(k):
@@ -172,19 +167,17 @@ def batch_infer(model, tokenizer, prompts):
             with torch.no_grad():
                 model_output = aquila_generate(tokenizer, model, prompts=[inp], max_gen_len=1)
             answers.append(model_output)
-    answers = [answer[-1] for answer in answers]
-    
-    return answers
+    return [answer[-1] for answer in answers]
 
 def main():
     
     run_results = {}
-    output_filename = 'run_results_%s_%sb.json' % ("aquila_chat", "7b")
-    
+    output_filename = 'run_results_aquila_chat_7bb.json'
+
     model, tokenizer = load()
     start_time = time.time()
     for task in TASKS:
-        print('Testing %s ...' % task)
+        print(f'Testing {task} ...')
         records = []
         dev_df = pd.read_csv(os.path.join(args.data_dir, "dev", task + "_dev.csv"), header=None)[:args.ntrain]
         test_df = pd.read_csv(os.path.join(args.data_dir, "test", task + "_test.csv"), header=None)
@@ -194,7 +187,7 @@ def main():
             prompt_end = format_example(test_df, i, include_answer=False)
             train_prompt = gen_prompt(dev_df, task, k)
             prompt = train_prompt + prompt_end
-            while len(tokenizer.tokenize(prompt)) + 1> 2048: # bos token
+            while len(tokenizer.tokenize(prompt)) > 2047: # bos token
                 prompt_split = prompt.split("\n\n")
                 prompt_split.pop(1)
                 prompt = '\n\n'.join(prompt_split)
@@ -206,7 +199,7 @@ def main():
         run_results[task] = {'pred_answers':pred_answers, 'gold_answers':gold_answers}
     with open(output_filename, 'w') as f:
         json.dump(run_results, f, ensure_ascii=False, indent=2)
-    
+
     compute_metric(output_filename)
     end_time = time.time()
     print("total run time %.2f" % (end_time - start_time))

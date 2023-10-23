@@ -257,9 +257,8 @@ class AutoLoader:
         try:
             model_id = _get_model_id(f"{raw_model_name}-{task_name}")
             if model_id != 'null':
-                model_name_ = f"{raw_model_name}-{task_name}"
-                return model_name_
-            else :
+                return f"{raw_model_name}-{task_name}"
+            else:
                 return raw_model_name
         except:
             print("Model hub is not reachable.")

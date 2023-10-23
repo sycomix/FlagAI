@@ -19,11 +19,7 @@ cl_args = Seq2SeqCollateArguments()
 
 print("downloading...")
 
-if task_name in CH_TASKS:
-    model_name = 'GLM-large-ch'
-else:
-    model_name = 'GLM-large-en'
-
+model_name = 'GLM-large-ch' if task_name in CH_TASKS else 'GLM-large-en'
 tokenizer = Tokenizer.from_pretrained(model_name)
 
 train_dataset = Seq2SeqDataset(task_name=task_name,
@@ -33,7 +29,7 @@ train_dataset = Seq2SeqDataset(task_name=task_name,
 valid_dataset = Seq2SeqDataset(task_name=task_name,
                                data_dir='../../datasets/',
                                dataset_type='test',
-                               tokenizer=tokenizer)                            
+                               tokenizer=tokenizer)
 collate_fn = ConstructSeq2seqStrategy(cl_args,
                                       tokenizer,
                                       task_name=task_name)

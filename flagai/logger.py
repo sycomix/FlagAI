@@ -75,13 +75,13 @@ def log_dist(message, ranks=None, level=logging.INFO):
     else:
         should_log = not dist.is_initialized()
         my_rank = dist.get_rank() if dist.is_initialized() else -1
-        
+
     ranks = ranks or []
     if ranks and not should_log:
         should_log = ranks[0] == -1
         should_log = should_log or (my_rank in set(ranks))
     if should_log:
-        final_message = "[Rank {}] {}".format(my_rank, message)
+        final_message = f"[Rank {my_rank}] {message}"
         logger.log(level, final_message)
 
 def print_json_dist(message, ranks=None, path=None):

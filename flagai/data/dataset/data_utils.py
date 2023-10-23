@@ -80,8 +80,7 @@ class InputExample(object):
 
     def to_dict(self):
         """Serialize this instance to a Python dictionary."""
-        output = copy.deepcopy(self.__dict__)
-        return output
+        return copy.deepcopy(self.__dict__)
 
     def to_json_string(self):
         """Serialize this instance to a JSON string."""
@@ -173,9 +172,9 @@ def build_input_from_ids(text_a_ids,
     # When size exceeds max_seq_length, cut the sequence
     if len(ids) >= max_seq_length - eos_length:
         max_seq_length_m1 = max_seq_length - 1
-        ids = ids[0:max_seq_length_m1]
-        types = types[0:max_seq_length_m1]
-        paddings = paddings[0:max_seq_length_m1]
+        ids = ids[:max_seq_length_m1]
+        types = types[:max_seq_length_m1]
+        paddings = paddings[:max_seq_length_m1]
 
     # if no text_b, we also should not put 1 at the end
     end_type = 0 if text_b_ids is None else 1
@@ -206,10 +205,10 @@ def build_input_from_ids(text_a_ids,
             types.extend([end_type] * (len_answer - 1))
             paddings.extend([1] * (len_answer - 1))
             position_ids.extend([mask_position] * (len_answer - 1))
-            if not args.no_block_position:
-                block_position_ids.extend(range(2, len(answer_ids) + 1))
-            else:
+            if args.no_block_position:
                 block_position_ids.extend([1] * (len(answer_ids) - 1))
+            else:
+                block_position_ids.extend(range(2, len(answer_ids) + 1))
             target_ids.extend(answer_ids)
             loss_masks.extend([1] * len(answer_ids))
         else:
@@ -368,7 +367,7 @@ def initialize_distributed(args):
     # os.environ['MASTER_PORT'] = '10501'
     args.master_ip = os.getenv('MASTER_ADDR', 'localhost')
     args.master_port = os.getenv('MASTER_PORT', '6000')
-    init_method += args.master_ip + ':' + args.master_port
+    init_method += f'{args.master_ip}:{args.master_port}'
 
     torch.distributed.init_process_group(backend=args.distributed_backend,
                                          world_size=args.world_size,

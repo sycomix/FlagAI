@@ -56,14 +56,10 @@ def read_file():
 
     with open(src_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            src.append(line.strip('\n').lower())
-
+        src.extend(line.strip('\n').lower() for line in lines)
     with open(tgt_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            tgt.append(line.strip('\n').lower())
-
+        tgt.extend(line.strip('\n').lower() for line in lines)
     return src, tgt
 
 
@@ -80,11 +76,10 @@ class BertTitleGenerationDataset(Dataset):
         src = self.sents_src[i]
         tgt = self.sents_tgt[i]
         data = self.tokenizer.encode_plus(src, tgt, max_length=self.maxlen)
-        output = {
+        return {
             "input_ids": data["input_ids"],
             "segment_ids": data["token_type_ids"],
         }
-        return output
 
     def __len__(self):
 

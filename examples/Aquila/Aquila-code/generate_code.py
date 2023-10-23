@@ -14,7 +14,7 @@ from flagai.data.tokenizer import Tokenizer
 model_dir = "./checkpoints_in"
 device = "cuda"
 
-print(f"building model...")
+print("building model...")
 loader = AutoLoader("lm",
                     model_name="aquilacode-7b-nv",
                     use_cache=True,

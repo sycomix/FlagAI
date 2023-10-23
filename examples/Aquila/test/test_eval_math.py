@@ -12,34 +12,27 @@ from flagai.auto_model.auto_loader import AutoLoader
 def find_answer(s):
     assert('boxed' in s)
     ans = s.split('boxed')[-1]
-    if(ans[0] == '{'):
+    if (ans[0] == '{'):
         stack = 1
         a = ''
         for c in ans[1:]:
-            if(c == '{'): 
+            if (c == '{'): 
                 stack += 1
-                a += c
-            elif(c == '}'): 
+            elif (c == '}'): 
                 stack -= 1
                 if(stack == 0): break
-                a += c
-            else: 
-                a += c
+            a += c
     else:
         a = ans.split('$')[0].strip()
     return a
 
 def test_answer(pred_str, ans_str):
-    if('The answer is ' in pred_str):
+    if ('The answer is ' in pred_str):
         pred = pred_str.split('The answer is ')[-1].strip()
     else:
         pattern = '\d*\.?\d+'
         pred = re.findall(pattern, pred_str)
-        if(len(pred) >= 1):
-            # print(pred_str)
-            pred = pred[-1]
-        else: pred = ''
-
+        pred = pred[-1] if (len(pred) >= 1) else ''
     gold = find_answer(ans_str)
     # gold = re.findall(pattern, ans_str)
     # print(ans_str)
@@ -58,7 +51,7 @@ def parse_pred_ans(filename):
     ans_pred = []
     ans_gold = []
     for l in lines:
-        if(l.startswith('Q: ')):
+        if (l.startswith('Q: ')):
             if(am is not None and a is not None):
                 questions.append(q)
                 ans_pred.append(am)
@@ -74,13 +67,12 @@ def parse_pred_ans(filename):
         elif(l.startswith('A:')):
             current_mode = 'a'
             a = l
+        elif (current_mode == 'q'): q += l
+        elif(current_mode == 'am'): am += l
+        elif(current_mode == 'a'): a += l
         else:
-            if(current_mode == 'q'): q += l
-            elif(current_mode == 'am'): am += l
-            elif(current_mode == 'a'): a += l
-            else:
-                raise ValueError(current_mode)
-                
+            raise ValueError(current_mode)
+
     questions.append(q)
     ans_pred.append(am)
     ans_gold.append(a)
@@ -113,10 +105,10 @@ def load():
 math_algebra = []
 dir_name = 'math_dataset/train/algebra'
 for filename in os.listdir(dir_name):
-    if(filename.endswith('.json')):
-        d = json.load(open(dir_name + '/' + filename))
+    if (filename.endswith('.json')):
+        d = json.load(open(f'{dir_name}/{filename}'))
         math_algebra.append(d)
-        
+
 # dev_idx = np.load('math_dataset/train/algebra_dev_idx.npy')
 # math_algebra_dev = [math_algebra[i] for i in dev_idx]
 
@@ -145,6 +137,6 @@ with open('outputs/dev_algebra_grad_1.txt', 'w') as fd:
         fd.write('Q: %s\nA_model:\n%s\nA:\n%s\n\n' % (q, response, a))
         i += 1
         # if(i == 10): break
-    
+
 questions, ans_pred, ans_gold = parse_pred_ans("outputs/dev_algebra_grad_1.txt")
 

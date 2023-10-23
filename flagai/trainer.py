@@ -37,7 +37,7 @@ from flagai.fp16 import DynamicLossScaler
 The Trainer class, to easily train a pytorh model on a new task.
 """
 def save_best(best_score, eval_dict):
-    return best_score if best_score < eval_dict['loss'] else eval_dict['loss']
+    return min(best_score, eval_dict['loss'])
 
 class Trainer():
     """
@@ -161,13 +161,15 @@ class Trainer():
         extra_args=None,
     ):
 
-        if timers is not None:
-            self.timers = timers
-        else:
-            self.timers = Timers()
+        self.timers = timers if timers is not None else Timers()
         self.env_type = env_type
-        if env_type not in set(
-            ["deepspeed", 'pytorch', 'pytorchDDP', 'deepspeed+mpu', 'bmtrain']):
+        if env_type not in {
+            "deepspeed",
+            'pytorch',
+            'pytorchDDP',
+            'deepspeed+mpu',
+            'bmtrain',
+        }:
             raise Exception("Not supported env_type!!!!")
         os.environ["ENV_TYPE"] = env_type
         self.experiment_name = experiment_name
@@ -247,7 +249,7 @@ class Trainer():
         """
         parents = [] if self.extra_args is None else [self.extra_args]
         parser = argparse.ArgumentParser(parents=parents)
-        if len(parents) == 0:
+        if not parents:
             parser.add_argument('--local_rank',
                                 type=int,
                                 default=0,
@@ -260,7 +262,7 @@ class Trainer():
         self.not_call_launch = ds_args.not_call_launch
         self.rank = int(os.environ.get('RANK', 0))
         self.world_size = int(os.environ.get('WORLD_SIZE', 1))
-        log_dist("not_call_launch: {}".format(ds_args.not_call_launch))
+        log_dist(f"not_call_launch: {ds_args.not_call_launch}")
         return []
 
     def set_seed(self, seed=1234):
@@ -289,10 +291,10 @@ class Trainer():
             self.master_ip = os.getenv('MASTER_ADDR', 'localhost')
             self.master_port = os.getenv('MASTER_PORT', '6000')
 
-            init_method += self.master_ip + ':' + self.master_port
+            init_method += f'{self.master_ip}:{self.master_port}'
             log_dist(
-                "init method {}, rank {}, device {}, local_rank {}.".format(
-                    init_method, self.rank, device, self.local_rank))
+                f"init method {init_method}, rank {self.rank}, device {device}, local_rank {self.local_rank}."
+            )
             if self.env_type == 'bmtrain':
                 # self.get_env_args()
                 bmt.init_distributed(
@@ -337,41 +339,40 @@ class Trainer():
                                                pin_memory=True,
                                                drop_last=False,
                                                shuffle=shuffle)
+        if self.env_type == 'deepspeed+mpu':
+            data_rank = mpu.get_data_parallel_rank()
+            #log_dist("*"*80)
+            #log_dist(f"local rank {self.rank} src rank  {rank} data rank {data_rank}")
+            #log_dist("*"*80)
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=self.world_size//self.model_parallel_size,
+                rank=data_rank,
+                shuffle=shuffle)
+        elif self.env_type == 'bmtrain':
+            log_dist("*"*80)
+            log_dist(f"local rank {self.rank}  world_size  {self.world_size} bmt rank {bmt.rank()}")
+            log_dist("*"*80)
+            num_replicas = self.world_size
+            rank = self.rank
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=num_replicas,
+                rank=rank,
+                shuffle=shuffle)
         else:
-            if self.env_type == 'deepspeed+mpu':
-                data_rank = mpu.get_data_parallel_rank()
-                #log_dist("*"*80)
-                #log_dist(f"local rank {self.rank} src rank  {rank} data rank {data_rank}")
-                #log_dist("*"*80)
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset,
-                    num_replicas=self.world_size//self.model_parallel_size,
-                    rank=data_rank,
-                    shuffle=shuffle)
-            elif self.env_type == 'bmtrain':
-                log_dist("*"*80)
-                log_dist(f"local rank {self.rank}  world_size  {self.world_size} bmt rank {bmt.rank()}")
-                log_dist("*"*80)
-                num_replicas = self.world_size
-                rank = self.rank
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset,
-                    num_replicas=num_replicas,
-                    rank=rank,
-                    shuffle=shuffle)
-            else:
-                num_replicas = self.world_size
-                rank = self.rank
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset, rank=rank, shuffle=shuffle)
-            return torch.utils.data.DataLoader(dataset,
-                                               batch_size=self.batch_size,
-                                               sampler=sampler,
-                                               num_workers=4,
-                                               drop_last=False,
-                                               pin_memory=False,
-                                               prefetch_factor=4,
-                                               collate_fn=collate_fn)
+            num_replicas = self.world_size
+            rank = self.rank
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset, rank=rank, shuffle=shuffle)
+        return torch.utils.data.DataLoader(dataset,
+                                           batch_size=self.batch_size,
+                                           sampler=sampler,
+                                           num_workers=4,
+                                           drop_last=False,
+                                           pin_memory=False,
+                                           prefetch_factor=4,
+                                           collate_fn=collate_fn)
 
     def train(self,
               model=None,
@@ -427,7 +428,7 @@ class Trainer():
         else:
             valid_dataloader = valid_dataset
 
- 
+
         """Train the model."""
         # Turn on training mode which enables dropout.
         if self.fp16 and self.env_type == 'pytorchDDP':
@@ -438,6 +439,7 @@ class Trainer():
             model.half()
         def count_parameters(model): 
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
         params_count = count_parameters(model)
         log_dist("===="*80)
         log_dist(f"==== Parameters: {params_count}")
@@ -482,7 +484,13 @@ class Trainer():
                 fp16=self.fp16,
                 optimizer=self.optimizer_type)  # if not self.fp16 else 'adafactor')
 
-        if lr_scheduler == None and optimizer != None and self.warm_up > 0 and 'deepspeed' not in self.env_type and self.epochs > 0:
+        if (
+            lr_scheduler is None
+            and optimizer != None
+            and self.warm_up > 0
+            and 'deepspeed' not in self.env_type
+            and self.epochs > 0
+        ):
             if self.env_type == 'bmtrain':
                 lr_scheduler = bmt.lr_scheduler.Noam(optimizer,
                                                     start_lr =self.lr, 
@@ -538,7 +546,7 @@ class Trainer():
         if len(self.metric_methods) > 0:
             best_score = -best_score
         for epoch in range(self.epochs):
-            log_dist("epoch "+str(epoch))
+            log_dist(f"epoch {str(epoch)}")
             if self.env_type != 'pytorch':
                 train_dataloader.sampler.set_epoch(epoch + self.world_size)
 
@@ -563,7 +571,7 @@ class Trainer():
                 elif self.env_type == 'pytorch':
                     lm_loss, _ = self.train_step_pytorch(
                         batch, model, optimizer, lr_scheduler)
-                
+
                 elif self.env_type == 'bmtrain':
                     lm_loss, _ = self.train_step_bmtrain(
                         batch, model, optimizer, lr_scheduler)
@@ -622,10 +630,8 @@ class Trainer():
                         for i in range(len(self.metric_methods)):
                             name = self.metric_methods[i][0]
                             score = eval_dict.get(name, 0)
-                            self.tb_writer.add_scalar(
-                                'eval_metrics/%s' % (name), score,
-                                self.iteration + 1)
-                                
+                            self.tb_writer.add_scalar(f'eval_metrics/{name}', score, self.iteration + 1)
+
                         if self.save_best is not None and self.save_best(best_score, eval_dict) != best_score:
                             best_score = self.save_best(best_score, eval_dict)
                             log_dist("saving best model with score {:.4f}".format(best_score))
@@ -639,7 +645,7 @@ class Trainer():
                                             save_dir=self.save_dir,
                                             save_rng=self.save_rng)
                 if self.save_dir and (self.iteration + 1) % self.save_interval == 0 and \
-                        self.iteration != best_iteration:
+                            self.iteration != best_iteration:
                     save_checkpoint(self.iteration+1,
                                     best_iteration+1,
                                     model,
@@ -649,7 +655,7 @@ class Trainer():
                                     save_dir=self.save_dir,
                                     save_rng=self.save_rng)
                 self.iteration += 1
-                # Checkpointing at the end of each epoch.
+                        # Checkpointing at the end of each epoch.
 
         # Evaluation #todo add train_args
         if ((self.epochs == 0) or (self.eval_interval and
@@ -725,11 +731,7 @@ class Trainer():
         """Single training step."""
 
         from contextlib import nullcontext
-        if self.fp16:
-            no_sync = model.module.no_sync
-        else:
-            no_sync = model.no_sync
-
+        no_sync = model.module.no_sync if self.fp16 else model.no_sync
         mycontext = no_sync if (
             self.accumulate_count +
             1) != self.gradient_accumulation_steps else nullcontext
@@ -931,13 +933,11 @@ class Trainer():
 
         torch.distributed.all_gather(tensor_list, input_)
 
-        # Note: torch.cat already creates a contiguous tensor.
-        if last_dim >= 0:
-            output = torch.cat(tensor_list, dim=0).contiguous()
-        else:
-            output = torch.mean(torch.FloatTensor(tensor_list))
-
-        return output
+        return (
+            torch.cat(tensor_list, dim=0).contiguous()
+            if last_dim >= 0
+            else torch.mean(torch.FloatTensor(tensor_list))
+        )
 
     def _gather_all_mpu(self, input_):
         group = mpu.get_model_parallel_group()
@@ -957,10 +957,7 @@ class Trainer():
         tensor_list[rank] = input_
         torch.distributed.all_gather(tensor_list, input_, group=group)
 
-        # Note: torch.cat already creates a contiguous tensor.
-        output = torch.cat(tensor_list, dim=last_dim).contiguous()
-
-        return output
+        return torch.cat(tensor_list, dim=last_dim).contiguous()
 
     def evaluate(self,
                  data_loader=None,
@@ -1016,7 +1013,7 @@ class Trainer():
                     deepspeed.checkpointing.reset()
                 logits = step_output['logits']
                 lm_loss = step_output['loss']
-                
+
                 if 'labels' in data_iterator:
                     labels = data_iterator['labels']
                 else:
@@ -1032,7 +1029,6 @@ class Trainer():
                             logits = torch.argmax(logits, dim=1).unsqueeze(0)
                         all_logits.append(logits)
                         all_labels.append(labels)
-                        pass
                 all_losses.append(lm_loss.view(1))
             # size of all_logits: (1, n)
             if len(self.metric_methods) != 0 and all_logits[0].size() != all_logits[-1].size():
@@ -1043,7 +1039,7 @@ class Trainer():
                 all_logits = torch.cat(all_logits, dim=0)
                 all_labels = torch.cat(all_labels, dim=0)
 
-            if self.env_type == 'pytorchDDP' or self.env_type == 'deepspeed':
+            if self.env_type in ['pytorchDDP', 'deepspeed']:
                 if len(self.metric_methods) != 0:
                     all_logits = self._gather_all(all_logits)
                     all_labels = self._gather_all(all_labels)
@@ -1070,18 +1066,18 @@ class Trainer():
                    'config') and 'checkpoint_activations' in tmp_model.config:
             tmp_model.config[
                 'checkpoint_activations'] = tmp_checkpoint_activations
-        metric_dct = {}
-        for i in range(len(self.metric_methods)):
-            metric_name = self.metric_methods[i][0]
-            metric_dct.update({metric_name: metrics[i]})
-        metric_dct.update({"loss": all_losses})
+        metric_dct = {
+            self.metric_methods[i][0]: metrics[i]
+            for i in range(len(self.metric_methods))
+        }
+        metric_dct["loss"] = all_losses
         return metric_dct
 
     def report_iteration_metrics(self, optimizer, lr, loss, elapsed_time, step,
                                  total_step):
-        log_string = ' iteration {:8d}/{:8d} |'.format(step, total_step)
-        log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
-            elapsed_time)
+        log_string = ' iteration {:8d}/{:8d} |'.format(
+            step, total_step
+        ) + ' elapsed time per iteration (ms): {:.1f} |'.format(elapsed_time)
         log_string += ' learning rate {:.3E} |'.format(lr)
         log_string += ' loss {:.6E} |'.format(loss)
         if self.fp16:
@@ -1093,8 +1089,7 @@ class Trainer():
 
     def report_evaluate_metrics(self, prefix, loss, ppl, gpt_loss, bert_loss,
                                 sent_loss, multi_loss, step):
-        string = ' validation loss at {}'.format(prefix)
-        string += ' | LM loss: {:.6E}'.format(loss)
+        string = f' validation loss at {prefix}' + ' | LM loss: {:.6E}'.format(loss)
         string += ' | LM PPL: {:.6E}'.format(ppl)
         length = len(string) + 1
         log_dist('-' * 100, [0])

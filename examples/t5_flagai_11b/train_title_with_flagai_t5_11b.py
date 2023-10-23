@@ -81,10 +81,7 @@ class T5Seq2seqDataset(Dataset):
         inputs = tokenizer(src)
         with tokenizer.as_target_tokenizer():
             labels = tokenizer(tgt)
-        output = {}
-        output['input_ids'] = inputs.input_ids
-        output['target_ids'] = labels.input_ids
-        return output
+        return {'input_ids': inputs.input_ids, 'target_ids': labels.input_ids}
 
     def __len__(self):
         return len(self.sents_src)
@@ -100,9 +97,9 @@ def t5_seq2seq_collate_fn(batch):
         return torch.tensor(pad_indice)
 
     token_ids_src = [data["input_ids"] for data in batch]
-    max_length_src = max([len(t) for t in token_ids_src])
+    max_length_src = max(len(t) for t in token_ids_src)
     token_ids_tgt = [data["target_ids"] for data in batch]
-    max_length_tgt = max([len(t) for t in token_ids_tgt])
+    max_length_tgt = max(len(t) for t in token_ids_tgt)
 
     token_ids_padded = padding(token_ids_src, max_length_src)
     target_ids_padded = padding(token_ids_tgt, max_length_tgt)

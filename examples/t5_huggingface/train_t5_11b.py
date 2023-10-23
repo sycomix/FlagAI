@@ -12,11 +12,11 @@ class MyTrainer(Trainer):
     def forward_step(self, data, model, mems):
 
         model_outputs = model(**data)
-        output = {}
-        output['loss'] = model_outputs.loss
-        output['logits'] = model_outputs.logits
-        output['hidden_states'] = model_outputs.decoder_hidden_states
-        return output
+        return {
+            'loss': model_outputs.loss,
+            'logits': model_outputs.logits,
+            'hidden_states': model_outputs.decoder_hidden_states,
+        }
 
 
 trainer = MyTrainer(env_type='deepspeed',
@@ -84,10 +84,7 @@ class T5Seq2seqDataset(Dataset):
         inputs = tokenizer(src)
         with tokenizer.as_target_tokenizer():
             labels = tokenizer(tgt)
-        output = {}
-        output['input_ids'] = inputs.input_ids
-        output['labels'] = labels.input_ids
-        return output
+        return {'input_ids': inputs.input_ids, 'labels': labels.input_ids}
 
     def __len__(self):
         return len(self.sents_src)
@@ -104,9 +101,9 @@ def seq2seq_collate_fn(batch):
         return torch.tensor(pad_indice)
 
     token_ids = [data["input_ids"] for data in batch]
-    max_length_tk = max([len(t) for t in token_ids])
+    max_length_tk = max(len(t) for t in token_ids)
     labels = [data["labels"] for data in batch]
-    max_length_lb = max([len(t) for t in labels])
+    max_length_lb = max(len(t) for t in labels)
 
     token_ids_padded = padding(token_ids, max_length_tk)
     labels_padded = padding(labels, max_length_lb)

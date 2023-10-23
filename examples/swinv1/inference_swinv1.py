@@ -30,13 +30,9 @@ def data_loader(root, batch_size=64, workers=8):
         ])
     )
 
-    val_loader = DataLoader(val_dataset,
-                            batch_size=batch_size,
-                            shuffle=False,
-                            num_workers=workers
-                            )
-    
-    return val_loader
+    return DataLoader(
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=workers
+    )
 
 # 测试预训练权重
 @torch.no_grad()
@@ -45,8 +41,7 @@ def test(model,data_loader):
     model.eval()
     top1_acc = 0.0
 
-    for step, (inputs, labels) in enumerate(data_loader):
-
+    for inputs, labels in data_loader:
         inputs, labels = inputs.to(device), labels.to(device)
         outputs = model(images=inputs)["logits"]
 

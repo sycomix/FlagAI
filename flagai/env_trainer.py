@@ -42,7 +42,7 @@ from flagai.fp16 import DynamicLossScaler
 The Trainer class, to easily train a pytorh model on a new task.
 """
 def save_best(best_score, eval_dict):
-    return best_score if best_score < eval_dict['loss'] else eval_dict['loss']
+    return min(best_score, eval_dict['loss'])
 
 def get_args_list(env_args):
     not_need_to_launch_args = ["not_call_launch", "local_rank", "master_port", "master_ip", "hostfile", "num_gpus", "num_nodes"]
@@ -50,9 +50,7 @@ def get_args_list(env_args):
     args = dir(env_args)
     for arg in args:
         if not arg.startswith("__") and not arg.startswith("_") and arg not in not_need_to_launch_args:
-            args_list.append(f"--{arg}")
-            args_list.append(str(getattr(env_args, arg)))
-
+            args_list.extend((f"--{arg}", str(getattr(env_args, arg))))
     print(f"args list is {args_list}")
     return args_list
 
@@ -62,8 +60,13 @@ class EnvTrainer():
     ):
         self.timers = Timers()
         self.env_type = env_args.env_type
-        if self.env_type not in set(
-            ["deepspeed", 'pytorch', 'pytorchDDP', 'deepspeed+mpu', 'bmtrain']):
+        if self.env_type not in {
+            "deepspeed",
+            'pytorch',
+            'pytorchDDP',
+            'deepspeed+mpu',
+            'bmtrain',
+        }:
             raise Exception("Not supported env_type!!!!")
         os.environ["ENV_TYPE"] = env_args.env_type
         self.experiment_name = env_args.experiment_name
@@ -115,7 +118,7 @@ class EnvTrainer():
             self.rank = int(os.environ.get('RANK', 0))
             self.world_size = int(os.environ.get('WORLD_SIZE', 1))
             self.local_rank = env_args.local_rank
-            log_dist("not_call_launch: {}".format(self.not_call_launch))
+            log_dist(f"not_call_launch: {self.not_call_launch}")
             # Implement for AutoLaunch
             # >>> python train.py # will call get_dist_args()
             # `--not_call_launch` is default 'False'
@@ -160,10 +163,10 @@ class EnvTrainer():
             self.master_ip = os.getenv('MASTER_ADDR', 'localhost')
             self.master_port = os.getenv('MASTER_PORT', '6000')
 
-            init_method += self.master_ip + ':' + self.master_port
+            init_method += f'{self.master_ip}:{self.master_port}'
             log_dist(
-                "init method {}, rank {}, device {}, local_rank {}.".format(
-                    init_method, self.rank, device, self.local_rank))
+                f"init method {init_method}, rank {self.rank}, device {device}, local_rank {self.local_rank}."
+            )
             if self.env_type == 'bmtrain':
                 # self.get_env_args()
                 bmt.init_distributed(
@@ -208,42 +211,41 @@ class EnvTrainer():
                                                pin_memory=True,
                                                drop_last=False,
                                                shuffle=shuffle)
+        if self.env_type == 'deepspeed+mpu':
+            rank = mpu.get_model_parallel_src_rank()
+            data_rank = mpu.get_data_parallel_rank()
+            log_dist("*"*80)
+            log_dist(f"local rank {self.rank} src rank  {rank} data rank {data_rank}")
+            log_dist("*"*80)
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=self.world_size//self.model_parallel_size,
+                rank=data_rank,
+                shuffle=shuffle)
+        elif self.env_type == 'bmtrain':
+            print("*"*80)
+            print("local rank", self.rank, "world_size", self.world_size, "bmt rank", bmt.rank())
+            print("*"*80)
+            num_replicas = self.world_size
+            rank = self.rank
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=num_replicas,
+                rank=rank,
+                shuffle=shuffle)
         else:
-            if self.env_type == 'deepspeed+mpu':
-                rank = mpu.get_model_parallel_src_rank()
-                data_rank = mpu.get_data_parallel_rank()
-                log_dist("*"*80)
-                log_dist(f"local rank {self.rank} src rank  {rank} data rank {data_rank}")
-                log_dist("*"*80)
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset,
-                    num_replicas=self.world_size//self.model_parallel_size,
-                    rank=data_rank,
-                    shuffle=shuffle)
-            elif self.env_type == 'bmtrain':
-                print("*"*80)
-                print("local rank", self.rank, "world_size", self.world_size, "bmt rank", bmt.rank())
-                print("*"*80)
-                num_replicas = self.world_size
-                rank = self.rank
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset,
-                    num_replicas=num_replicas,
-                    rank=rank,
-                    shuffle=shuffle)
-            else:
-                num_replicas = self.world_size
-                rank = self.rank
-                sampler = torch.utils.data.distributed.DistributedSampler(
-                    dataset, rank=rank, shuffle=shuffle)
-            return torch.utils.data.DataLoader(dataset,
-                                               batch_size=self.batch_size,
-                                               sampler=sampler,
-                                               num_workers=4,
-                                               drop_last=False,
-                                               pin_memory=False,
-                                               prefetch_factor=4,
-                                               collate_fn=collate_fn)
+            num_replicas = self.world_size
+            rank = self.rank
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset, rank=rank, shuffle=shuffle)
+        return torch.utils.data.DataLoader(dataset,
+                                           batch_size=self.batch_size,
+                                           sampler=sampler,
+                                           num_workers=4,
+                                           drop_last=False,
+                                           pin_memory=False,
+                                           prefetch_factor=4,
+                                           collate_fn=collate_fn)
 
     def train(self,
               model=None,

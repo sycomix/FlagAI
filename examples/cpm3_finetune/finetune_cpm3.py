@@ -35,22 +35,22 @@ task_ids = {
 
 
 def get_tokenizer(args):
-    tokenizer = CPM3Tokenizer(args.vocab_file)
-    return tokenizer
+    return CPM3Tokenizer(args.vocab_file)
 
 def get_model(args):
     config = CPM3Config.from_json_file(args.model_config)
     print ("vocab size:%d"%(config.vocab_size))
 
-    model = CPM3.from_pretrain(model_name = 'cpm3-train', download_path='/sharefs/baai-mrnd/xw/')
-
-    return model
+    return CPM3.from_pretrain(
+        model_name='cpm3-train', download_path='/sharefs/baai-mrnd/xw/'
+    )
 
 def get_optimizer(args, model):
-    optimizer = bmp.optim.AdamOffloadOptimizer(model.parameters(), 
-                                               weight_decay=args.weight_decay, 
-                                               scale=args.loss_scale)
-    return optimizer
+    return bmp.optim.AdamOffloadOptimizer(
+        model.parameters(),
+        weight_decay=args.weight_decay,
+        scale=args.loss_scale,
+    )
 
 def get_learning_rate_scheduler(args, optimizer):
     if args.lr_decay_iters is None:
@@ -98,7 +98,7 @@ def batch_iter(args, dataset, start_step = 0, batch_size=2, concat=False, shuffl
 
     exist_total = 0
 
-    idx = [i for i in range(len(dataset))]
+    idx = list(range(len(dataset)))
     if shuffle:
         random.shuffle(idx) # 每个epoch都shuffle一遍数据
 
@@ -223,10 +223,7 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
     start_step = args.start_step
     iteration = start_step
 
-    if not args.is_nlu:
-        best_eval_metric = 1e9
-    else:
-        best_eval_metric = -1e9
+    best_eval_metric = 1e9 if not args.is_nlu else -1e9
     best_eval_step = 0
     model.to(torch.device('cuda', args.local_rank))
     print_inspect(model, "*")
@@ -234,10 +231,10 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
     if bmp.rank() == 0:
         writer = SummaryWriter(log_dir=args.log_dir)
 
-    for epoch in range(int(args.epochs)):
+    for _ in range(int(args.epochs)):
         for data in batch_iter(args, train_dataset, start_step, args.batch_size, concat=False, shuffle=True):
             model.train()
-            
+
             iteration += 1
 
             st = time.time()
@@ -280,7 +277,7 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
                     grad_norm
                 )
             )
-            
+
             if iteration % args.eval_step == 0:
                 model.eval()
                 with torch.no_grad():
@@ -299,7 +296,7 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
                         targets = data["tgt"].long().cuda()
 
                         logits, _ = model(input_idx, input_length, input_context, input_position, input_segment, input_span)
-                        
+
                         # debug
                         # Note: this is teaching force manner!
                         if idx == 0:
@@ -315,7 +312,7 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
                                 pred = tokenizer.decode(valid_pred_ids)
                                 bmp.print_rank("target: ", target)
                                 bmp.print_rank("pred: ", pred)
-                        
+
                         if not args.is_nlu:
                             metric = loss_func(logits.view(-1, logits.size(-1)), targets.view(-1))
                         else:
@@ -324,10 +321,10 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
                             masked_logits_max = torch.masked_fill(logits_max, targets.eq(-100), 0)
                             masked_targets = torch.masked_fill(targets, targets.eq(-100), 0)
                             metric = (masked_logits_max == masked_targets).all(dim=-1).sum().float() / logits.size(0)
-                        
+
                         total_metric += bmp.sum_loss(metric).item()
                         cnt += 1
-                    
+
                     total_metric /= cnt
                     bmp.print_rank(
                     "| Eval Iter: {:6d} | Metric: {:.4f}".format(
@@ -337,22 +334,22 @@ def finetune(args, tokenizer, model, optimizer, lr_scheduler, train_dataset, eva
                     )
 
                     if (not args.is_nlu and total_metric < best_eval_metric) or (args.is_nlu and total_metric > best_eval_metric):
-                        bmp.save(model, os.path.join(args.save, args.save_name + "-best_eval.pt"))
-                        bmp.print_rank("Iteration {} is the best checkpoint now!".format(iteration))
+                        bmp.save(model, os.path.join(args.save, f"{args.save_name}-best_eval.pt"))
+                        bmp.print_rank(f"Iteration {iteration} is the best checkpoint now!")
                         best_eval_metric = total_metric
                         best_eval_step = iteration
                     elif args.early_stop_patience !=-1 and (iteration - best_eval_step) // args.eval_step >= args.early_stop_patience:
-                        bmp.print_rank("early stop at iteration {}!".format(iteration))
+                        bmp.print_rank(f"early stop at iteration {iteration}!")
                         exit(0)
                     if bmp.rank() == 0:
                         writer.add_scalar("Metric/eval", total_metric, iteration)
-            
+
             if iteration % args.inspect_iters == 0:
                 print_inspect(model, "*")
-            
+
             if bmp.rank() == 0:
                 writer.add_scalar("Loss/train", global_loss, iteration)
-            
+
             if args.save != None and iteration % args.save_iters == 0:
                 bmp.save(model, os.path.join(args.save, args.save_name+("-%d.pt" % iteration)))
 

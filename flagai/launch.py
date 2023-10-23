@@ -34,7 +34,7 @@ def fetch_hostfile(hostfile_path):
     # e.g., worker-0 slots=16
     with open(hostfile_path, 'r') as fd:
         resource_pool = collections.OrderedDict()
-        for line in fd.readlines():
+        for line in fd:
             line = line.strip()
             if line == '':
                 # skip empty lines
@@ -62,14 +62,11 @@ def cmd_load_hyperparam(config_path=None, format="json", encoding="utf-8"):
         if format == "json":
             config_dict = json.load(f)
         else:
-            raise NameError("current format%s for hyperparam file is invalid" %
-                            format)
+            raise NameError(f"current format{format} for hyperparam file is invalid")
     config_cmd = []
     for key in config_dict:
-        if len(str(config_dict[key])) == 0:
-            config_cmd.append('--' + key)
-        else:
-            config_cmd.append('--' + key)
+        config_cmd.append(f'--{key}')
+        if str(config_dict[key]) != "":
             config_cmd.append(str(config_dict[key]))
     return config_cmd
 
@@ -95,19 +92,23 @@ def launch_dist(launcher='distributed_deepspeed',
         node_rank = 0
         for host, slots in resource_pool.items():
             cmd_launch = ['pdsh', '-f', '1024', '-w']
-            cmd_launch.append('ssh:' + host)
+            cmd_launch.append(f'ssh:{host}')
             cmd_launch.append('"')
             if nccl_info:
                 cmd_launch.extend([
                     'export NCCL_DEBUG=info;', 'export NCCL_IB_DISABLE=0;',
                     'export NCCL_NET_GDR_LEVEL=2;'
                 ])
-            cmd_launch.extend([
-                'export NUM_NODES=' + str(num_nodes) + ';',
-                'export GPUS_PER_NODE=' + str(gpus_per_node) + ';',
-                'export NCCL_NET_GDR_LEVEL=2;', sys.executable, '-m',
-                'torch.distributed.launch'
-            ])
+            cmd_launch.extend(
+                [
+                    f'export NUM_NODES={str(num_nodes)};',
+                    f'export GPUS_PER_NODE={str(gpus_per_node)};',
+                    'export NCCL_NET_GDR_LEVEL=2;',
+                    sys.executable,
+                    '-m',
+                    'torch.distributed.launch',
+                ]
+            )
             torch_distributed_args = [
                 '--nproc_per_node',
                 str(gpus_per_node),
@@ -139,6 +140,7 @@ def launch_dist(launcher='distributed_deepspeed',
             p = subprocess.Popen(run_cmd, shell=True, preexec_fn=os.setsid)
             def signal_handler(signal, frame):
                 os.killpg(os.getpgid(p.pid), 9)
+
             signal.signal(signal.SIGINT, signal_handler)
             p.wait()
             # subprocess.Popen(run_cmd, shell=True)
@@ -146,11 +148,15 @@ def launch_dist(launcher='distributed_deepspeed',
 
     elif num_nodes == 1 and launcher == 'distributed_torch':
         cmd_launch = []
-        cmd_launch.extend([
-            'export NUM_NODES=' + str(num_nodes) + ';',
-            'export GPUS_PER_NODE=' + str(gpus_per_node) + ';', sys.executable,
-            '-m', 'torch.distributed.launch'
-        ])
+        cmd_launch.extend(
+            [
+                f'export NUM_NODES={str(num_nodes)};',
+                f'export GPUS_PER_NODE={str(gpus_per_node)};',
+                sys.executable,
+                '-m',
+                'torch.distributed.launch',
+            ]
+        )
         torch_distributed_args = [
             '--nproc_per_node',
             str(gpus_per_node),
@@ -182,7 +188,7 @@ def launch_dist(launcher='distributed_deepspeed',
             )
 
             with open('/tmp/hostfile', 'w') as w:
-                w.write(socket.gethostname() + ' slots=2')
+                w.write(f'{socket.gethostname()} slots=2')
             hostfile = '/tmp/hostfile'
 
         if nccl_info:
@@ -229,10 +235,13 @@ def launch_dist(launcher='distributed_deepspeed',
         # This launcher
         for gpu_id in range(gpus_per_node):
             cmd_launch = []
-            cmd_launch.extend([
-                'export MASTER_ADDR=' + str(master_addr) + ';',
-                'export MASTER_PORT=' + str(master_port) + ';', sys.executable
-            ])
+            cmd_launch.extend(
+                [
+                    f'export MASTER_ADDR={str(master_addr)};',
+                    f'export MASTER_PORT={str(master_port)};',
+                    sys.executable,
+                ]
+            )
             cmd_launch.append(training_script)
             torch_distributed_args = [
                 '--gpu_nums',

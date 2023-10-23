@@ -16,8 +16,8 @@ env_args = EnvArgs()
 trainer = EnvTrainer(env_args)
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = cur_dir + '/data/train.src'
-tgt_dir = cur_dir + '/data/train.tgt'
+src_dir = f'{cur_dir}/data/train.src'
+tgt_dir = f'{cur_dir}/data/train.tgt'
 
 maxlen = 256
 auto_loader = AutoLoader("lm",
@@ -32,14 +32,10 @@ def read_file():
 
     with open(src_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            src.append(line.strip('\n').lower())
-
+        src.extend(line.strip('\n').lower() for line in lines)
     with open(tgt_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            tgt.append(line.strip('\n').lower())
-
+        tgt.extend(line.strip('\n').lower() for line in lines)
     return src, tgt
 
 
@@ -62,9 +58,7 @@ class GLMSeq2seqDataset(Dataset):
     def __getitem__(self, i):
         source_text = self.sents_src[i]
         target_text = self.sents_tgt[i]
-        data = self.tokenizer.encode_plus(source_text, target_text)
-
-        return data
+        return self.tokenizer.encode_plus(source_text, target_text)
 
     def __len__(self):
 
@@ -99,7 +93,7 @@ class GLMPoetryDynamicCollateFN():  #padding process in each batch
         attention_mask = [data['attention_mask'] for data in batch]
         loss_mask = [data['loss_mask'] for data in batch]
 
-        max_length = max([len(t) for t in input_ids])
+        max_length = max(len(t) for t in input_ids)
         for i in range(len(input_ids)):
             input_ids[i] = self.pad_token(input_ids[i], max_length)
             target_ids[i] = self.pad_token(target_ids[i], max_length)

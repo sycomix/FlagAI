@@ -117,7 +117,7 @@ def collate_fn(batch):
         return torch.tensor(pad_indice)
 
     input_ids = [data["input_ids"] for data in batch]
-    max_length = max([len(t) for t in input_ids])
+    max_length = max(len(t) for t in input_ids)
     input_ids = padding(input_ids, max_length)[:, :seq_length]
 
     data = {"input_ids": input_ids, "labels": input_ids}

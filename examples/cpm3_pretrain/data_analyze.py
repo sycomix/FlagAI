@@ -1,15 +1,22 @@
 import json
 
-fout = open('{}'.format('/sharefs/baai-mrnd/xw/cpm3_train_data/cpm3_train_data.jsonl'), "w", encoding='utf-8')
-fin = open('{}'.format('/sharefs/webbrain-lijijie/data/CEPSUM/test_public.jsonl'), 'r', encoding='utf-8')
+fout = open(
+    '/sharefs/baai-mrnd/xw/cpm3_train_data/cpm3_train_data.jsonl',
+    "w",
+    encoding='utf-8',
+)
+fin = open(
+    '/sharefs/webbrain-lijijie/data/CEPSUM/test_public.jsonl',
+    'r',
+    encoding='utf-8',
+)
 
 def random_mask(source: str):
     if type(source) == list:
         return source
     length = len(source)
     half = length // 3
-    res = [source[:half],source[half * 2:]]
-    return res
+    return [source[:half],source[half * 2:]]
 
 for line in fin:
     instance = {
@@ -24,7 +31,7 @@ for line in fin:
         }
     }
     res = json.loads(line)
-    for key in instance.keys():
+    for key in instance:
         if key == 'source':
             instance[key] = random_mask(res.get(key, instance[key]))
         elif key == 'target':

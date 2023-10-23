@@ -48,7 +48,7 @@ model_name = "gpt2-base-en"
 tokenizer = Tokenizer.from_pretrained(model_name, cache_dir=model_name)
 
 from flagai.model.gpt2_model import GPT2Model
-config_file = model_name + "/config.json"
+config_file = f"{model_name}/config.json"
 model = GPT2Model.init_from_json(config_file=config_file)
 trainer.pre_train(model)
 
@@ -74,7 +74,7 @@ def collate_fn(batch):
         return torch.tensor(pad_indice)
 
     input_ids = [data["input_ids"] for data in batch]
-    max_length = max([len(t) for t in input_ids])
+    max_length = max(len(t) for t in input_ids)
     input_ids = padding(input_ids, max_length)[:,:seq_length]
 
     data = {

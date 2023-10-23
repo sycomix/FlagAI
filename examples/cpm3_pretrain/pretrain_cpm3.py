@@ -24,26 +24,25 @@ task_ids = {
 }
 
 def get_tokenizer(args):
-    tokenizer = CPM3Tokenizer(args.vocab_file)
-    return tokenizer
+    return CPM3Tokenizer(args.vocab_file)
 
 def get_model(args):
     config = CPM3Config._dict_from_json_file(args.model_config)
     print ("vocab size:%d"%(config['vocab_size']))
 
-    if args.load != None:
-        model = CPM3.from_pretrain(model_name = 'cpm3-train', download_path='/sharefs/baai-mrnd/xw/')
-    else:
+    if args.load is None:
         model = CPM3(config)
         bmp.init_parameters(model)
+    else:
+        model = CPM3.from_pretrain(model_name = 'cpm3-train', download_path='/sharefs/baai-mrnd/xw/')
     return model
 
 def get_optimizer(args, model):
-    optimizer = bmp.optim.AdamOffloadOptimizer(model.parameters(), 
-                                               weight_decay=args.weight_decay, 
-                                               scale=args.loss_scale)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    return optimizer
+    return bmp.optim.AdamOffloadOptimizer(
+        model.parameters(),
+        weight_decay=args.weight_decay,
+        scale=args.loss_scale,
+    )
 
 def get_learning_rate_scheduler(args, optimizer):
     if args.lr_decay_iters is None:
@@ -225,7 +224,7 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
             targets_tmp = targets.expand(task_num, -1, -1)
             task_info = task_info.expand(task_num, -1, -1)
 
-            task = task_info.new([x for x in range(task_num)])[:, None, None]
+            task = task_info.new(list(range(task_num)))[:, None, None]
             targets_tmp = torch.where(task_info == task, targets_tmp, -100)
 
             task_loss_list = []
@@ -239,9 +238,9 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
 
         loss = optimizer.loss_scale(loss)
         loss.backward()
-        
+
         grad_norm = clip_grad_norm(optimizer.param_groups, 1.0, scale = optimizer.scale / config['world_size'], norm_type = 2)
-    
+
         bmp.optim_step(optimizer, lr_scheduler)
 
         iteration_time = time.time() - st
@@ -268,12 +267,12 @@ def pretrain(args, tokenizer, model, optimizer, lr_scheduler, dataset):
         if bmp.rank() == 0:
             writer.add_scalar("Loss/train", global_loss, iteration)
             for i in task_ids.keys():
-                writer.add_scalar("Loss/train/{}".format(i), task_loss_list[task_ids[i]], iteration)
-        
+                writer.add_scalar(f"Loss/train/{i}", task_loss_list[task_ids[i]], iteration)
+
         if args.save != None and iteration % args.save_iters == 0:
             bmp.save(model, os.path.join(args.save, args.save_name+("-%d.pt" % iteration)))
 
-    bmp.save(model, os.path.join(args.save, args.save_name+".pt"))
+    bmp.save(model, os.path.join(args.save, f"{args.save_name}.pt"))
 
 def main():
     args = initialize()

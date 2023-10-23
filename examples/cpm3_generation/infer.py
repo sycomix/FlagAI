@@ -17,8 +17,11 @@ from generation import generate
 import random
 
 def get_tokenizer(args):
-    tokenizer = CPM3Tokenizer(args.vocab_file, space_token = '</_>', line_token = '</n>',)
-    return tokenizer
+    return CPM3Tokenizer(
+        args.vocab_file,
+        space_token='</_>',
+        line_token='</n>',
+    )
 
 def get_model(args, vocab_size):
     config = CPM3Config.from_json_file(args.model_config)
@@ -54,12 +57,7 @@ def initialize():
 
 
 def random_mask(source: str):
-    if type(source) == list:
-        return source
-    length = len(source)
-    half = length // 2
-    res = [source[:half]]
-    return res
+    return source if type(source) == list else [source[:len(source) // 2]]
 
 
 
@@ -67,42 +65,38 @@ def main():
     args = initialize()
     tokenizer, model = setup_model(args)
 
-    fout = open("{}".format(args.output_file), "w", encoding="utf-8")
-    fin = open('{}'.format(args.input_file), 'r', encoding='utf-8')
+    with open(f"{args.output_file}", "w", encoding="utf-8") as fout:
+        with open(f'{args.input_file}', 'r', encoding='utf-8') as fin:
+            # 指定最短生成长度
+            min_len = 2 # 确保生成内容不为空
+            for line in fin:
+                instance = {
+                    'mode': 'lm',
+                    'source': [],
+                    'target': "",
+                    'control': {
+                        'keywords': [],
+                        'genre': "",
+                        'relations': [],
+                        'events': []
+                    }
+                }
+                res = json.loads(line)
+                for key in instance:
+                    if key == 'source':
+                        instance[key] = random_mask(res.get(key, instance[key]))
+                    else:
+                        instance[key] = res.get(key, instance[key])
+                target_span_len = args.span_length
 
-    for line in fin:
-        instance = {
-            'mode': 'lm',
-            'source': [],
-            'target': "",
-            'control': {
-                'keywords': [],
-                'genre': "",
-                'relations': [],
-                'events': []
-            }
-        }
-        res = json.loads(line)
-        for key in instance.keys():
-            if key == 'source':
-                instance[key] = random_mask(res.get(key, instance[key]))
-            else:
-                instance[key] = res.get(key, instance[key])
-        target_span_len = args.span_length
+                for it in generate(model, tokenizer, instance, target_span_len, beam=args.beam_size,
+                                    temperature = args.temperature, top_k = args.top_k, top_p = args.top_p,
+                                    no_repeat_ngram_size = args.no_repeat_ngram_size, repetition_penalty = args.repetition_penalty, 
+                                    random_sample=args.random_sample, min_len=min_len, contrastive_search=args.use_contrastive_search):
 
-        # 指定最短生成长度
-        min_len = 2 # 确保生成内容不为空
-        for it in generate(model, tokenizer, instance, target_span_len, beam=args.beam_size,
-                            temperature = args.temperature, top_k = args.top_k, top_p = args.top_p,
-                            no_repeat_ngram_size = args.no_repeat_ngram_size, repetition_penalty = args.repetition_penalty, 
-                            random_sample=args.random_sample, min_len=min_len, contrastive_search=args.use_contrastive_search):
-            
-            fout.write(it)
-            fout.flush()
-        fout.write('\n')
-    
-    fin.close()
-    fout.close()
+                    fout.write(it)
+                    fout.flush()
+                fout.write('\n')
 
 if __name__ == "__main__":
     main()

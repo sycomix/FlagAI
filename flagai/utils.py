@@ -30,8 +30,7 @@ import torch.distributed as dist
 def get_hostname():
     hostname_cmd = ["hostname -I"]
     result = subprocess.check_output(hostname_cmd, shell=True)
-    master_addr = result.decode('utf-8').split()[0]
-    return master_addr
+    return result.decode('utf-8').split()[0]
 
 
 def get_spare_port(args):
@@ -122,15 +121,12 @@ class Timers:
 def report_memory(name):
     """Simple GPU memory report."""
 
+    string = f'{name} memory (MB)'
     mega_bytes = 1024.0 * 1024.0
-    string = name + ' memory (MB)'
-    string += ' | allocated: {}'.format(torch.cuda.memory_allocated() /
-                                        mega_bytes)
-    string += ' | max allocated: {}'.format(torch.cuda.max_memory_allocated() /
-                                            mega_bytes)
-    string += ' | cached: {}'.format(torch.cuda.memory_cached() / mega_bytes)
-    string += ' | max cached: {}'.format(torch.cuda.memory_reserved() /
-                                         mega_bytes)
+    string += f' | allocated: {torch.cuda.memory_allocated() / mega_bytes}'
+    string += f' | max allocated: {torch.cuda.max_memory_allocated() / mega_bytes}'
+    string += f' | cached: {torch.cuda.memory_cached() / mega_bytes}'
+    string += f' | max cached: {torch.cuda.memory_reserved() / mega_bytes}'
     log_dist(string)
 
 
@@ -190,9 +186,7 @@ def save_checkpoint(iteration,
     #         for key, value in state_dict.items() if requires_grad_dict[key]
     #     }
     # else:
-    if env_type == 'bmtrain':
-        pass
-    else:
+    if env_type != 'bmtrain':
         state_dict = model.state_dict()
         sd['module'] = state_dict
 
@@ -218,9 +212,9 @@ def save_checkpoint(iteration,
 
         if hasattr(model, 'save_config'):
             model.save_config(config_path)
-            log_dist('  successfully saved {}'.format(config_path))
+            log_dist(f'  successfully saved {config_path}')
         torch.save(sd, checkpoint_name)
-        log_dist('  successfully saved {}'.format(checkpoint_name))
+        log_dist(f'  successfully saved {checkpoint_name}')
 
         tracker_filename = get_checkpoint_tracker_filename(save_dir)
         with open(tracker_filename, 'w') as f:
@@ -235,7 +229,7 @@ def save_checkpoint(iteration,
             config_path = os.path.join(save_dir, str(iteration), 'config.json')
             if hasattr(model, 'save_config'):
                 model.save_config(config_path)
-                log_dist('  successfully saved {}'.format(config_path))
+                log_dist(f'  successfully saved {config_path}')
             tracker_filename = get_checkpoint_tracker_filename(save_dir)
             with open(tracker_filename, 'w') as f:
                 f.write(str(iteration) + '\t' + str(best_iteration))
@@ -253,15 +247,14 @@ def get_checkpoint_iteration(load_path):
     # Read the tracker file and set the iteration.
     tracker_filename = get_checkpoint_tracker_filename(load_path)
     if not os.path.isfile(tracker_filename):
-        log_dist('WARNING: could not find the metadata file {} '.format(
-            tracker_filename))
+        log_dist(f'WARNING: could not find the metadata file {tracker_filename} ')
         if os.path.isdir(load_path):
             path = os.path.normpath(load_path)
             load_dir, iteration = os.path.split(path)
             log_dist('Try to directly load the checkpoint from the directory')
             return load_dir, iteration, -1, True
     else:
-        log_dist('read the metadata file {} '.format(tracker_filename))
+        log_dist(f'read the metadata file {tracker_filename} ')
         with open(tracker_filename, 'r', encoding='utf8') as infile:
             iteration, best_iteration = infile.readline().strip().split('\t')
         return load_path, iteration, best_iteration, True
@@ -285,8 +278,7 @@ def load_checkpoint(model, load_dir="checkpoints", load_type='latest'):
     else:
         checkpoint_name = get_checkpoint_name(load_dir, best_iteration)
 
-    log_dist('global rank {} is loading checkpoint {}'.format(
-        0, checkpoint_name), [0])
+    log_dist(f'global rank 0 is loading checkpoint {checkpoint_name}', [0])
     env_type = os.getenv('ENV_TYPE')
 
     if env_type == 'bmtrain':
@@ -295,7 +287,6 @@ def load_checkpoint(model, load_dir="checkpoints", load_type='latest'):
         optim_checkpoint_name = "%s.optim.%d" % (checkpoint_name, bmt.rank())
         sd = torch.load(optim_checkpoint_name, map_location='cpu')
         log_dist(f'bmt rank {bmt.rank()} load sd {sd} from {optim_checkpoint_name}', [bmt.rank()])
-        return sd
     else:
         sd = torch.load(checkpoint_name, map_location='cpu')
 
@@ -303,7 +294,8 @@ def load_checkpoint(model, load_dir="checkpoints", load_type='latest'):
             model = model.module
         model.load_state_dict(sd['module'], strict=False)
         del sd['module']
-        return sd
+
+    return sd
 
 
 def load_optim(optimizer, lr_scheduler, sd):

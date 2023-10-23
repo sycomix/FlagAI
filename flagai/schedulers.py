@@ -50,26 +50,24 @@ class AnnealingLR(_LRScheduler):
             )
 
     def get_lr(self):
-        # https://openreview.net/pdf?id=BJYwwY9ll pg. 4
         if self.warmup_iter > 0 and self.num_iters <= self.warmup_iter:
             return float(self.start_lr) * self.num_iters / self.warmup_iter
+        if self.decay_style == self.DECAY_STYLES[0]:
+            decay_step_ratio = (self.num_iters -
+                                self.warmup_iter) / self.end_iter
+            return self.start_lr - self.start_lr * (
+                1 - 1 / self.decay_ratio) * decay_step_ratio
+        elif self.decay_style == self.DECAY_STYLES[1]:
+            decay_step_ratio = min(
+                1.0, (self.num_iters - self.warmup_iter) / self.end_iter)
+            return self.start_lr / self.decay_ratio * (
+                (math.cos(math.pi * decay_step_ratio) + 1) *
+                (self.decay_ratio - 1) / 2 + 1)
+        elif self.decay_style == self.DECAY_STYLES[2]:
+            # TODO: implement exponential decay
+            return self.start_lr
         else:
-            if self.decay_style == self.DECAY_STYLES[0]:
-                decay_step_ratio = (self.num_iters -
-                                    self.warmup_iter) / self.end_iter
-                return self.start_lr - self.start_lr * (
-                    1 - 1 / self.decay_ratio) * decay_step_ratio
-            elif self.decay_style == self.DECAY_STYLES[1]:
-                decay_step_ratio = min(
-                    1.0, (self.num_iters - self.warmup_iter) / self.end_iter)
-                return self.start_lr / self.decay_ratio * (
-                    (math.cos(math.pi * decay_step_ratio) + 1) *
-                    (self.decay_ratio - 1) / 2 + 1)
-            elif self.decay_style == self.DECAY_STYLES[2]:
-                # TODO: implement exponential decay
-                return self.start_lr
-            else:
-                return self.start_lr
+            return self.start_lr
 
     def step(self, step_num=None):
         if step_num is None:
@@ -80,15 +78,14 @@ class AnnealingLR(_LRScheduler):
             group['lr'] = new_lr
 
     def state_dict(self):
-        sd = {
+        return {
             # 'start_lr': self.start_lr,
             'warmup_iter': self.warmup_iter,
             'num_iters': self.num_iters,
             'decay_style': self.decay_style,
             'end_iter': self.end_iter,
-            'decay_ratio': self.decay_ratio
+            'decay_ratio': self.decay_ratio,
         }
-        return sd
 
     def load_state_dict(self, sd):
         # self.start_lr = sd['start_lr']
@@ -121,15 +118,15 @@ def get_learning_rate_scheduler(optimizer, args):
     num_iters = max(1, num_iters)
     init_step = -1
     warmup_iter = args.warmup * num_iters
-    lr_scheduler = AnnealingLR(optimizer,
-                               start_lr=args.lr,
-                               warmup_iter=warmup_iter,
-                               num_iters=num_iters - warmup_iter,
-                               decay_style=args.lr_decay_style,
-                               last_iter=init_step,
-                               decay_ratio=args.lr_decay_ratio)
-
-    return lr_scheduler
+    return AnnealingLR(
+        optimizer,
+        start_lr=args.lr,
+        warmup_iter=warmup_iter,
+        num_iters=num_iters - warmup_iter,
+        decay_style=args.lr_decay_style,
+        last_iter=init_step,
+        decay_ratio=args.lr_decay_ratio,
+    )
 
 ## A modified cosine learning rate schedule,
 ## such that the final learning rate is equal to 10% of the maximal learning rate,

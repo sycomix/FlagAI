@@ -40,7 +40,7 @@ valid_dataset = SuperGlueDataset(task_name=task_name,
                                  cloze_eval=True)
 cl_args = CollateArguments()
 cl_args.cloze_eval = True
-if task_name in ['copa', 'wsc', 'record']:
+if task_name in {'copa', 'wsc', 'record'}:
     cl_args.multi_token = True
 
 from flagai.data.dataset import ConstructSuperglueStrategy

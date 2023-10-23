@@ -39,15 +39,23 @@ class RtePVP(PVP):
                                 ]
         elif self.pattern_id == 1:
             parts_a, parts_b = [None, self.shortenable(text_b), '?'], [
-                None, [self.mask], ',', None,
-                self.shortenable(" " + text_a)
+                None,
+                [self.mask],
+                ',',
+                None,
+                self.shortenable(f" {text_a}"),
             ]
         elif self.pattern_id == 2:
             parts_a, parts_b = [
                 None,
-                self.shortenable(text_a), None, ' question:',
-                self.shortenable(" " + text_b), ' True or False?', None,
-                ' answer:', [self.mask]
+                self.shortenable(text_a),
+                None,
+                ' question:',
+                self.shortenable(f" {text_b}"),
+                ' True or False?',
+                None,
+                ' answer:',
+                [self.mask],
             ], []
         else:
             raise NotImplementedError(self.pattern_id)

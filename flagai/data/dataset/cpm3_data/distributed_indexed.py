@@ -27,11 +27,11 @@ def code(dtype):
 
 
 def index_file_path(prefix_path):
-    return prefix_path + '.idx'
+    return f'{prefix_path}.idx'
 
 
 def data_file_path(prefix_path):
-    return prefix_path + '.bin'
+    return f'{prefix_path}.bin'
 
 
 class DistributedMMapIndexedDataset(torch.utils.data.Dataset):
@@ -147,8 +147,7 @@ class DistributedMMapIndexedDataset(torch.utils.data.Dataset):
         self._do_init(self._path, self._name, self._cache, self._state)
     
     def __relative_idx(self, idx):
-        res = self.start + idx - self.history[self._state - 1]
-        return res
+        return self.start + idx - self.history[self._state - 1]
 
     def __slice_item(self, start, stop):
         ptr = self._index._pointers[self.__relative_idx(start)]
@@ -166,13 +165,12 @@ class DistributedMMapIndexedDataset(torch.utils.data.Dataset):
         elif isinstance(idx, slice):
             start, stop, step = idx.indices(2147483647)
             assert step == 1 or step is None, "Slices into indexed_dataset must be contiguous"
-            if stop >= self.history[self._state]:
-                res_1 = self.__slice_item(start, self.history[self._state]) 
-                self._next_file()
-                res_2 = self.__slice_item(self.history[self._state - 1], stop)
-                return res_1 + res_2
-            else:
+            if stop < self.history[self._state]:
                 return self.__slice_item(start, stop)
+            res_1 = self.__slice_item(start, self.history[self._state])
+            self._next_file()
+            res_2 = self.__slice_item(self.history[self._state - 1], stop)
+            return res_1 + res_2
 
     def __len__(self):
         return self.history[self._state]
@@ -181,7 +179,7 @@ class DistributedMMapIndexedDataset(torch.utils.data.Dataset):
     def sizes(self):
         return self._index.sizes
         
-    def exists(path):
-        return (
-            os.path.exists(index_file_path(path)) and os.path.exists(data_file_path(path))
+    def exists(self):
+        return os.path.exists(index_file_path(self)) and os.path.exists(
+            data_file_path(self)
         )

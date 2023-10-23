@@ -50,9 +50,7 @@ def read_file():
 
     with open(src_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            src.append(line.strip('\n').lower())
-
+        src.extend(line.strip('\n').lower() for line in lines)
     return src, src
 
 
@@ -70,10 +68,9 @@ class GPT2Seq2seqDataset(Dataset):
         tgt = self.sents_tgt[i]
         data = self.tokenizer.encode_plus(src, tgt, max_length=self.maxlen)
 
-        output = {
+        return {
             "input_ids": data["input_ids"],
         }
-        return output
 
     def __len__(self):
         return len(self.sents_src)
@@ -87,7 +84,7 @@ class GPT2Seq2seqDataset(Dataset):
             return torch.tensor(pad_indice)
 
         input_ids = [data["input_ids"] for data in batch]
-        max_length = max([len(t) for t in input_ids])
+        max_length = max(len(t) for t in input_ids)
         input_ids = padding(input_ids, max_length)
 
         data = {

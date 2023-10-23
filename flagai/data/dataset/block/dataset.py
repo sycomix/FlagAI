@@ -72,12 +72,11 @@ class BlockDataset(Dataset):
             idx = np_rng.randint(self.total_len)
             data_idx = bisect_right(self.weighting, idx)
             tokens, loss_mask = self.getidx(data_idx)
-            if self.filter_english:
-                text = self.tokenizer.DecodeIds(tokens[:1024])
-                lang = self.model.predict(text.replace('\n', ''))[0][0]
-                if lang == '__label__en':
-                    break
-            else:
+            if not self.filter_english:
+                break
+            text = self.tokenizer.DecodeIds(tokens[:1024])
+            lang = self.model.predict(text.replace('\n', ''))[0][0]
+            if lang == '__label__en':
                 break
         return tokens, loss_mask
 
@@ -98,9 +97,9 @@ class BlockDataset(Dataset):
 
         # randomly choose a position for start
         if tokens_to_strip > 0:
-            move_count = 0
             strip_left_tokens = rng.randint(tokens_to_strip)
             if rng.random() > self.non_sentence_start:
+                move_count = 0
                 if rng.random() < 0.5:
                     while move_count < self.max_seq_len // 2 and strip_left_tokens > 0 and not self.contains_sentence_end(
                             tokens[strip_left_tokens - 1]):
@@ -182,8 +181,4 @@ class BlockDataset(Dataset):
             return True
         if ';' in tok:
             return True
-        if ':' in tok:
-            return True
-        if '\n' in tok:
-            return True
-        return False
+        return True if ':' in tok else '\n' in tok

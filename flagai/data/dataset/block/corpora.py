@@ -202,7 +202,7 @@ class WuDaoCorpus(PromptReader):
         title = item.get("title", None)
         content = item.get("content", None)
         if title:
-            text += title.strip() + " "
+            text += f"{title.strip()} "
         if content:
             text += content
         if len(text) > 100:

@@ -44,7 +44,7 @@ valid_dataset = SuperGlueDataset(task_name=task_name,
                                  tokenizer=tokenizer,
                                  cloze_eval=True)
 cl_args = CollateArguments()
-if task_name in ['copa', 'wsc', 'record']:
+if task_name in {'copa', 'wsc', 'record'}:
     cl_args.multi_token = True
 
 collate_fn = ConstructSuperglueStrategy(cl_args,

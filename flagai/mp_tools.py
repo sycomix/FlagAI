@@ -120,9 +120,8 @@ def check_pytorch_model_mp_size(checkpoint: str, target_mp: int):
     # else:
     #     filenames.remove('pytorch_model.bin')
     print(
-        "check the weight files in {}, the number of mp_size({}) {} num_of_files({})"
-        .format(checkpoint, target_mp,
-                "=" if target_mp == len(filenames) else "!=", len(filenames)))
+        f'check the weight files in {checkpoint}, the number of mp_size({target_mp}) {"=" if target_mp == len(filenames) else "!="} num_of_files({len(filenames)})'
+    )
     return target_mp == len(filenames)
 
 
@@ -143,10 +142,7 @@ def change_pytorch_model_mp_from_1_to_n(checkpoint: str, target_mp: int):
         print("MP size keeps the same.")
         exit(0)
 
-    if checkpoint[-1] == '/':
-        new_checkpoint = checkpoint[:-1]
-    else:
-        new_checkpoint = checkpoint
+    new_checkpoint = checkpoint[:-1] if checkpoint[-1] == '/' else checkpoint
     preserve_keys = [
         "lr_scheduler",
         "skipped_steps",
@@ -253,10 +249,7 @@ def change_pytorch_model_mp_from_1_to_n_new(model_name_brief, checkpoint: str, t
         print("MP size keeps the same.")
         exit(0)
 
-    if checkpoint[-1] == '/':
-        new_checkpoint = checkpoint[:-1]
-    else:
-        new_checkpoint = checkpoint
+    new_checkpoint = checkpoint[:-1] if checkpoint[-1] == '/' else checkpoint
     preserve_keys = [
         "lr_scheduler",
         "skipped_steps",
@@ -307,21 +300,7 @@ def change_pytorch_model_mp_from_1_to_n_new(model_name_brief, checkpoint: str, t
                                 dim = trans_keys[keys]
 
                                 if len(v.shape) == 2:
-                                    if dim == 30:
-                                        part = v.shape[0] // ratio // 3
-                                        d_new['module'][k] = torch.cat([
-                                            v[shift * part:(shift + 1) *
-                                                           part, :].clone(),
-                                            v[(shift + ratio) *
-                                              part:(shift + 1 + ratio) *
-                                                   part, :].clone(),
-                                            v[(shift + 2 * ratio) *
-                                              part:(shift + 1 + 2 * ratio) *
-                                                   part, :].clone()
-                                        ], 0)
-                                        break
-
-                                    elif dim == 0:
+                                    if dim == 0:
                                         part = v.shape[dim] // ratio
                                         d_new['module'][k] = v[shift *
                                                        part:(shift + 1) *
@@ -333,6 +312,20 @@ def change_pytorch_model_mp_from_1_to_n_new(model_name_brief, checkpoint: str, t
                                         d_new['module'][k] = v[:, shift *
                                                                   part:(shift + 1) *
                                                                        part].clone()
+                                        break
+
+                                    elif dim == 30:
+                                        part = v.shape[0] // ratio // 3
+                                        d_new['module'][k] = torch.cat([
+                                            v[shift * part:(shift + 1) *
+                                                           part, :].clone(),
+                                            v[(shift + ratio) *
+                                              part:(shift + 1 + ratio) *
+                                                   part, :].clone(),
+                                            v[(shift + 2 * ratio) *
+                                              part:(shift + 1 + 2 * ratio) *
+                                                   part, :].clone()
+                                        ], 0)
                                         break
 
                                 elif len(v.shape) == 1:
@@ -348,12 +341,10 @@ def change_pytorch_model_mp_from_1_to_n_new(model_name_brief, checkpoint: str, t
                                               part:(shift + 1 + 2 * ratio) *
                                                    part].clone()
                                         ], 0)
-                                        break
-
-                                    else :
+                                    else:
                                         d_new['module'][k] = v[shift * part:(shift + 1) *
                                                             part].clone()
-                                        break
+                                    break
 
                         if flag == 0:
                             d_new['module'][k] = v.clone()
@@ -387,11 +378,7 @@ def change_pytorch_model_mp_from_n_to_1(model_name_brief, checkpoint):
 
     filenames = [os.path.join(checkpoint, x) for x in filenames]
 
-    if checkpoint[-1] == '/':
-        new_checkpoint = checkpoint[:-1]
-    else:
-        new_checkpoint = checkpoint
-
+    new_checkpoint = checkpoint[:-1] if checkpoint[-1] == '/' else checkpoint
     preserve_keys = [
         "lr_scheduler",
         "skipped_steps",
@@ -431,7 +418,15 @@ def change_pytorch_model_mp_from_n_to_1(model_name_brief, checkpoint):
                         # find a key to concat
                         dim = trans_keys[keys]
                         if len(v.shape) == 2:
-                            if dim == 30:
+                            if dim == 0:
+                                d[k] = torch.cat([d[k], v], 0)
+                                break
+
+                            elif dim == 1:
+                                d[k] = torch.cat([d[k], v], 1)
+                                break
+
+                            elif dim == 30:
                                 size_1 = d[k].shape[0] // 3
                                 size_2 = v.shape[0] // 3
                                 target = d[k]
@@ -441,14 +436,6 @@ def change_pytorch_model_mp_from_n_to_1(model_name_brief, checkpoint):
                                     v[size_2:size_2 * 2, :], target[size_1 * 2:, :],
                                     v[size_2 * 2:, :]
                                 ], 0)
-                                break
-
-                            elif dim == 0:
-                                d[k] = torch.cat([d[k], v], 0)
-                                break
-
-                            elif dim == 1:
-                                d[k] = torch.cat([d[k], v], 1)
                                 break
 
                         elif len(v.shape) == 1:
@@ -462,11 +449,9 @@ def change_pytorch_model_mp_from_n_to_1(model_name_brief, checkpoint):
                                     v[size_2 * 2:]
                                 ], 0)
 
-                                break
-
-                            else :
+                            else:
                                 d[k] = torch.cat([d[k], v], 0)
-                                break
+                            break
 
         filename = os.path.join(new_checkpoint,
                                 "pytorch_model.bin")

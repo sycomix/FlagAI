@@ -25,8 +25,8 @@ trainer = Trainer(
     save_interval=1,
 )
 cur_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = cur_dir + '/data/train.src'
-tgt_dir = cur_dir + '/data/train.tgt'
+src_dir = f'{cur_dir}/data/train.src'
+tgt_dir = f'{cur_dir}/data/train.tgt'
 maxlen = 256
 loader = AutoLoader("title-generation", "T5-base-ch", model_dir="./state_dict/")
 model = loader.get_model()
@@ -39,14 +39,10 @@ def read_file():
 
     with open(src_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            src.append(line.strip('\n').lower())
-
+        src.extend(line.strip('\n').lower() for line in lines)
     with open(tgt_dir, 'r', encoding='utf-8') as f:
         lines = f.readlines()
-        for line in lines:
-            tgt.append(line.strip('\n').lower())
-
+        tgt.extend(line.strip('\n').lower() for line in lines)
     return src, tgt
 
 
@@ -71,7 +67,7 @@ class T5Seq2seqDataset(Dataset):
         tgt = self.sents_tgt[i]
 
         src_ids = tokenizer.encode_plus(src)['input_ids']
-        tgt_ids = tokenizer.encode_plus('[SEP]' + tgt + '[SEP]')['input_ids']
+        tgt_ids = tokenizer.encode_plus(f'[SEP]{tgt}[SEP]')['input_ids']
 
         def length_proc(tokens, max_len=200):
             if len(tokens) <= max_len:

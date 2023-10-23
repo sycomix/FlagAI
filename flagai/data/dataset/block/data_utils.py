@@ -177,9 +177,9 @@ def get_dataset_lazy(path,
                        is_array=pre_tokenize,
                        load_memory=no_lazy_loader)
 
-    text = PromptDataset(prompt_loader=prompts,
-                         text_loader=texts,
-                         tokenizer=tokenizer,
-                         to_tokenize=not pre_tokenize)
-
-    return text
+    return PromptDataset(
+        prompt_loader=prompts,
+        text_loader=texts,
+        tokenizer=tokenizer,
+        to_tokenize=not pre_tokenize,
+    )

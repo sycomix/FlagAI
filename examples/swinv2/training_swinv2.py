@@ -69,8 +69,7 @@ def collate_fn(batch):
 
 def top1_acc(pred, labels, **kwargs):
     pred = pred.argmax(dim=1)
-    top1_acc = pred.eq(labels).sum().item() / len(pred)
-    return top1_acc
+    return pred.eq(labels).sum().item() / len(pred)
 
 if __name__ == '__main__':
 

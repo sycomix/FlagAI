@@ -69,8 +69,7 @@ def bleu_metric(predictions, labels, meta=None, metric="rouge-1", duplicate_rate
         pred_list.append(prediction)
 
     bleu_results = sacrebleu.corpus_bleu(pred_list, [ref_list])
-    bleu_score = bleu_results.score
-    return bleu_score
+    return bleu_results.score
 
 def rouge_metric(predictions, labels, meta=None, metric="rouge-1", duplicate_rate=0.7, dataset='cnn_dm'):
     metric_dict = {"rouge-1": "rouge1", "rouge-2": "rouge2", "rouge-l": "rougeLsum"}
@@ -88,8 +87,7 @@ def rouge_metric(predictions, labels, meta=None, metric="rouge-1", duplicate_rat
     scorer = rouge_scorer.RougeScorer([metric_dict[metric]], use_stemmer=True)
     scores = [scorer.score(pred, ref) for pred, ref in zip(pred_list, ref_list)]
     scores = [score[metric_dict[metric]].fmeasure * 100 for score in scores]
-    scores = sum(scores) / len(scores)
-    return scores
+    return sum(scores) / len(scores)
 
 
 
@@ -112,9 +110,9 @@ class ALMSeq2seqDataset(Dataset):
     def __getitem__(self, i):
         source_text = self.sents_src[i]
         target_text = self.sents_tgt[i]
-        data = self.tokenizer.encode_plus(source_text=source_text, target_text=target_text, max_length=512)
-
-        return data
+        return self.tokenizer.encode_plus(
+            source_text=source_text, target_text=target_text, max_length=512
+        )
 
     def __len__(self):
 
@@ -149,7 +147,7 @@ class ALMCollateFN():  #padding process in each batch
         attention_mask = [data['attention_mask'] for data in batch]
         loss_mask = [data['loss_mask'] for data in batch]
 
-        max_length = max([len(t) for t in input_ids])
+        max_length = max(len(t) for t in input_ids)
         for i in range(len(input_ids)):
             input_ids[i] = self.pad_token(input_ids[i], max_length)
             target_ids[i] = self.pad_token(target_ids[i], max_length)

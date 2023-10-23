@@ -63,7 +63,7 @@ def bert_sequence_label_gp_collate_fn(batch):
 def seq2seq_collate_fn(batch):
     # bert seq2seq task collate fn
     token_ids = [data["input_ids"] for data in batch]
-    max_length = max([len(t) for t in token_ids])
+    max_length = max(len(t) for t in token_ids)
     token_type_ids = [data["segment_ids"] for data in batch]
 
     token_ids_padded = padding(token_ids, max_length)
@@ -77,7 +77,7 @@ def seq2seq_collate_fn(batch):
     }
 
     # TODO
-    flash_atten = all([data["flash_atten"] for data in batch])
+    flash_atten = all(data["flash_atten"] for data in batch)
     if flash_atten:
         attention_mask = token_ids_padded > 0
         seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
@@ -91,7 +91,7 @@ def seq2seq_collate_fn(batch):
 def bert_cls_collate_fn(batch):
     # bert cls task collate fn
     token_ids = [data["input_ids"] for data in batch]
-    max_length = max([len(t) for t in token_ids])
+    max_length = max(len(t) for t in token_ids)
     token_type_ids = [data["segment_ids"] for data in batch]
     target_ids = [data["labels"] for data in batch]
     target_ids = torch.tensor(target_ids, dtype=torch.long)
@@ -113,7 +113,7 @@ def bert_sequence_label_collate_fn(batch):
 
     token_ids = [data["input_ids"] for data in batch]
 
-    max_length = max([len(t) for t in token_ids])
+    max_length = max(len(t) for t in token_ids)
     target_ids = [data["labels"] for data in batch]
 
     token_ids_padded = padding(token_ids, max_length)

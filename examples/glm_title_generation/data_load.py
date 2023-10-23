@@ -60,7 +60,7 @@ def get_dataset_size(shards):
     len_filename = os.path.join(dir_path, '__len__')
     if os.path.exists(sizes_filename):
         sizes = json.load(open(sizes_filename, 'r'))
-        total_size = sum([int(sizes[os.path.basename(shard)]) for shard in shards_list])
+        total_size = sum(int(sizes[os.path.basename(shard)]) for shard in shards_list)
     elif os.path.exists(len_filename):
         # FIXME this used to be eval(open(...)) but that seemed rather unsafe
         total_size = ast.literal_eval(open(len_filename, 'r').read())
@@ -130,8 +130,7 @@ def tarfile_to_samples_nothrow(src, handler=log_and_continue):
     # NOTE this is a re-impl of the webdataset impl with group_by_keys that doesn't throw
     streams = url_opener(src, handler=handler)
     files = tar_file_expander(streams, handler=handler)
-    samples = group_by_keys_nothrow(files, handler=handler)
-    return samples
+    return group_by_keys_nothrow(files, handler=handler)
 
 
 def pytorch_worker_seed(increment=0):
@@ -176,12 +175,7 @@ class detshuffle2(wds.PipelineStage):
             self.epoch += 1
             epoch = self.epoch
         rng = random.Random()
-        if self.seed < 0:
-            # If seed is negative, we use the worker's seed, this will be different across all nodes/workers
-            seed = pytorch_worker_seed(epoch)
-        else:
-            # This seed to be deterministic AND the same across all nodes/workers in each epoch
-            seed = self.seed + epoch
+        seed = pytorch_worker_seed(epoch) if self.seed < 0 else self.seed + epoch
         rng.seed(seed)
         return _shuffle(src, self.bufsize, self.initial, rng)
 

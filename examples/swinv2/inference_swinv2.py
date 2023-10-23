@@ -36,13 +36,9 @@ def data_loader(root, batch_size=256, workers=1):
         ])
     )
 
-    val_loader = DataLoader(val_dataset,
-                            batch_size=batch_size,
-                            shuffle=False,
-                            num_workers=workers
-                            )
-
-    return val_loader
+    return DataLoader(
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=workers
+    )
 
 @torch.no_grad()
 def test(model,data_loader):

@@ -13,8 +13,7 @@ import sacrebleu
 from rouge_score import rouge_scorer
 
 def sigmoid(x):
-    sig = 1 / (1 + math.exp(-x))
-    return sig
+    return 1 / (1 + math.exp(-x))
 
 
 def accuracy_metric(predictions, labels, meta=None):
@@ -30,11 +29,8 @@ def accuracy_metric(predictions, labels, meta=None):
             count += prediction == label
     else:
         prediction, label = predictions[0], labels[0]
-        
-        if sigmoid(prediction) >= 0.5:
-            count += label == 1
-        else:
-            count += label == 0
+
+        count += label == 1 if sigmoid(prediction) >= 0.5 else label == 0
     return 100.0 * count / len(labels)
 
 
@@ -52,8 +48,7 @@ def bleu_metric(predictions, labels, meta=None, tokenizer=None):
         prediction = tokenizer.DecodeIds(prediction)
         pred_list.append(prediction)
     bleu_results = sacrebleu.corpus_bleu(pred_list, [ref_list])
-    bleu_score = bleu_results.score
-    return bleu_score
+    return bleu_results.score
 
 def rouge_metric(predictions, labels, meta=None, tokenizer=None, metric="rouge-1"):
     metric_dict = {"rouge-1": "rouge1", "rouge-2": "rouge2", "rouge-l": "rougeLsum"}
@@ -71,15 +66,12 @@ def rouge_metric(predictions, labels, meta=None, tokenizer=None, metric="rouge-1
     scorer = rouge_scorer.RougeScorer([metric_dict[metric]], use_stemmer=True)
     scores = [scorer.score(pred, ref) for pred, ref in zip(pred_list, ref_list)]
     scores = [score[metric_dict[metric]].fmeasure * 100 for score in scores]
-    scores = sum(scores) / len(scores)
-    return scores
+    return sum(scores) / len(scores)
     
 def f1_metric(predictions, labels, meta=None):
     pred = torch.argmax(predictions, dim=-1).cpu()
     labels = labels.cpu()
-    if torch.equal(pred, labels):
-        return 1.0
-    return f1_score(labels, pred)
+    return 1.0 if torch.equal(pred, labels) else f1_score(labels, pred)
 
 
 def f1_macro_metric(predictions, labels, meta=None):
@@ -106,10 +98,11 @@ def multirc_em(predictions, labels, meta):
     for qid, val in q_predictions:
         predictions_per_question[qid].append(val)
 
-    em = 0
-    for qid in unique_questions:
-        if actuals_per_question[qid] == predictions_per_question[qid]:
-            em += 1
+    em = sum(
+        1
+        for qid in unique_questions
+        if actuals_per_question[qid] == predictions_per_question[qid]
+    )
     em /= len(unique_questions)
     return em
 

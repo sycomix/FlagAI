@@ -86,21 +86,24 @@ def calc_banned_ngram_tokens(
             prev_input_ids = prev_input_ids[:, max(start_idx, end_idx + 1 - window_size): end_idx+1]
         else:
             prev_input_ids = prev_input_ids[:, start_idx: end_idx+1]
-        
+
     cur_len = prev_input_ids.size(1)
-    
+
     if cur_len + 1 < ngram_size:
         # return no banned tokens if we haven't generated no_repeat_ngram_size tokens yet
         return [[] for _ in range(num_hypos)]
 
     generated_ngrams = _get_ngrams(ngram_size, prev_input_ids, num_hypos)
 
-    banned_tokens = [
-        _get_generated_ngrams(generated_ngrams[hypo_idx], prev_input_ids[hypo_idx], ngram_size, cur_len)
+    return [
+        _get_generated_ngrams(
+            generated_ngrams[hypo_idx],
+            prev_input_ids[hypo_idx],
+            ngram_size,
+            cur_len,
+        )
         for hypo_idx in range(num_hypos)
     ]
-
-    return banned_tokens
 
 # min_length_constraint
 def min_length_constraint(logits, cur_len, min_len, tokenizer):
@@ -141,7 +144,7 @@ def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float("inf")):
 def calc_banned_bad_words_ids(prev_input_ids, bad_words_ids, start_idx=None,  end_idx=None):
     if start_idx is not None and end_idx is not None:
         prev_input_ids = prev_input_ids[:, start_idx: end_idx+1]
-        
+
     banned_tokens = []
 
     def _tokens_match(prev_tokens, tokens):
@@ -152,11 +155,7 @@ def calc_banned_bad_words_ids(prev_input_ids, bad_words_ids, start_idx=None,  en
             # if bad word tokens are longer then prev input_ids they can't be equal
             return False
 
-        if prev_tokens[-len(tokens) :] == tokens:
-            # if tokens match
-            return True
-        else:
-            return False
+        return prev_tokens[-len(tokens) :] == tokens
 
     for prev_input_ids_slice in prev_input_ids:
         banned_tokens_slice = []
@@ -190,14 +189,16 @@ def enforce_repetition_penalty_(tokenizer,
     for i in range(batch_size * num_beams):
         if start_idx is None or end_idx is None:
             output_tokens = prev_output_tokens[i].tolist()
+        elif end_idx >= start_idx:
+            output_tokens = (
+                prev_output_tokens[i][
+                    max(start_idx, end_idx + 1 - window_size) : end_idx + 1
+                ].tolist()
+                if window_size
+                else prev_output_tokens[i][start_idx : end_idx + 1].tolist()
+            )
         else:
-            if end_idx >= start_idx:
-                if window_size:
-                    output_tokens = prev_output_tokens[i][max(start_idx, end_idx + 1 - window_size): end_idx+1].tolist()
-                else:
-                    output_tokens = prev_output_tokens[i][start_idx: end_idx+1].tolist()
-            else:
-                output_tokens = []
+            output_tokens = []
         #print(output_tokens)
         for previous_token in set(output_tokens):
             # if score < 0 then repetition penalty has to multiplied to reduce the previous token probability
@@ -242,7 +243,7 @@ def postprocess_next_token_scores(tokenizer,
             scores[i, banned_tokens] = -float("inf")
 
     # 允许生成eos和bos
-    scores[:, [0, 1, 2, 3, 4, 5] + [x for x in range(8, 20)]] = -float("inf")
+    scores[:, [0, 1, 2, 3, 4, 5] + list(range(8, 20))] = -float("inf")
 
     if start_idx is not None and end_idx is not None and min_len is not None:
         min_length_constraint(scores, end_idx - start_idx + 2, min_len, tokenizer)
@@ -313,7 +314,6 @@ def make_input_cpm3(ctx, info, prompt_length):
 
 def get_control(control, tokenizer, task):
     sep_id1 = 30665
-    sep_id2 = 30666
     keywords = []
     if 'keywords' in control and control['keywords'] != []:
         keywords_set = set()
@@ -349,6 +349,7 @@ def get_control(control, tokenizer, task):
     events = []
     if 'events' in control and control['events'] != []:
         events_set = set()
+        sep_id2 = 30666
         for i in control['events']:
             event_join = "/".join([":".join(x) for x in sorted(i.items(), key=lambda x:x[0])])
             if event_join not in events_set:
@@ -384,7 +385,7 @@ def get_control(control, tokenizer, task):
         res = keywords + relations + events
     else:
         raise ValueError("task id error")
-    
+
     return res
 
 
@@ -399,14 +400,10 @@ def encode(tokenizer, i, target_span_len=100, use_target=False):
     ids = []
     info = [task]
 
-    if 'control' in i:
-        control = get_control(i['control'], tokenizer, task)
-    else:
-        control = []
-
+    control = get_control(i['control'], tokenizer, task) if 'control' in i else []
     ids += control
     info.append(len(control))
-    
+
     assert len(i['source']) <= 2
     src = i['source'][0]
 
@@ -436,7 +433,7 @@ def encode(tokenizer, i, target_span_len=100, use_target=False):
             info.extend([len(tgt_ids), 0])
             # 选项二：指定长度，给定eos
             # info.extend([len(tgt_ids)-1, 1])
-    elif task == 1 or task == 2 or task == 5 or task == 6:
+    elif task in [1, 2, 5, 6]:
         # 压缩、扩写（句子级、段落级）
         tgt_ids = [tokenizer.bos_id] + tgt_ids + [tokenizer.eos_id]
         ids += tgt_ids
@@ -450,7 +447,7 @@ def encode(tokenizer, i, target_span_len=100, use_target=False):
         ids += tgt_ids
         # 不控制长度，eos自己生成
         info.extend([len(tgt_ids), 0])
-        
+
     info = info[:1] + np.cumsum(info[1:]).tolist()
 
     assert len(ids) == info[-1]
@@ -486,7 +483,7 @@ def generate_no_beam_cpm3(model, tokenizer, instance, target_span_len,
                 logits, _, past_key_values, cached_attn_mask_pos_bias = model(input_tokens, input_length, context_input, position_input, segment_input, span_input, past_key_values, rig, i, cached_attn_mask_pos_bias)
             else:
                 logits, _, past_key_values, cached_attn_mask_pos_bias = model(input_tokens[:, i:i+1], input_length, context_input, position_input, segment_input, span_input, past_key_values, rig, i, cached_attn_mask_pos_bias)
-  
+
             logits = logits[:, -1, :]
             logits = postprocess_next_token_scores(
                 tokenizer=tokenizer,
@@ -515,15 +512,11 @@ def generate_no_beam_cpm3(model, tokenizer, instance, target_span_len,
             # early stop, Note: not supports multi-GPUs
             if next_token == tokenizer.eos_id:
                 break
-        
-        if instance['mode'] == 'lm':
-            decode_start_idx = lef
-        else:
-            decode_start_idx = lef+1
 
+        decode_start_idx = lef if instance['mode'] == 'lm' else lef+1
         for idx, id in enumerate(input_tokens[0][decode_start_idx:].cpu().numpy()):
             token = tokenizer.decode([id])
-            if id == tokenizer.eos_id or id == tokenizer.pad_id:
+            if id in [tokenizer.eos_id, tokenizer.pad_id]:
                 break
 
             yield token
@@ -586,7 +579,7 @@ def generate_contrastive_search_cpm3(model, tokenizer, instance, target_span_len
                 window_size=None,
                 min_len=min_len
             )
-            
+
             if prev_hidden_states is None:
                 # only penalize model output
                 prev_hidden_states = hidden_states.new_zeros(hidden_states.size(0), 0, hidden_states.size(2)).float()
@@ -595,7 +588,7 @@ def generate_contrastive_search_cpm3(model, tokenizer, instance, target_span_len
 
             probs = F.softmax(logits, dim=-1)
             cand_probs, cand_ids = torch.topk(probs, top_k, dim=-1, largest=True, sorted=True)
-            
+
             if prev_hidden_states.size(1) == 0:
                 best_id = cand_ids[0, 0]
             else:
@@ -615,7 +608,7 @@ def generate_contrastive_search_cpm3(model, tokenizer, instance, target_span_len
                 batch_cached_pos_bias = cached_pos_bias.expand(top_k, -1, -1, -1)
                 batch_cached_attn_mask_pos_bias = (batch_cached_attn_mask, batch_cached_pos_bias)
                 batch_past_key_values = enlarge_past_key_values(past_key_values, top_k)
-                
+
                 # contrastive search
                 batch_input_tokens[torch.arange(top_k).long(), i+1] = cand_ids[0].int()
                 _, hidden_states, _, _ = model(batch_input_tokens[:, i+1:i+2], batch_input_length, batch_context_input, batch_position_input, batch_segment_input, batch_span_input, batch_past_key_values, rig, i+1, batch_cached_attn_mask_pos_bias)
@@ -626,20 +619,16 @@ def generate_contrastive_search_cpm3(model, tokenizer, instance, target_span_len
                 scores = (1 - alpha) * cand_probs.squeeze(0) - alpha * max_scores
                 _, selected_idx  = torch.topk(scores, k = 1)
                 best_id = torch.gather(cand_ids.squeeze(0), dim = 0, index=selected_idx)
-                
+
             input_tokens[0][i + 1] = best_id
 
             if best_id == tokenizer.eos_id:
                 break
-        
-        if instance['mode'] == 'lm':
-            decode_start_idx = lef
-        else:
-            decode_start_idx = lef+1
 
+        decode_start_idx = lef if instance['mode'] == 'lm' else lef+1
         for idx, id in enumerate(input_tokens[0][decode_start_idx:].cpu().numpy()):
-            token = tokenizer.decode([id])            
-            if id == tokenizer.eos_id or id == tokenizer.pad_id:
+            token = tokenizer.decode([id])
+            if id in [tokenizer.eos_id, tokenizer.pad_id]:
                 break
 
             yield token

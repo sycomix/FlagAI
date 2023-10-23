@@ -18,20 +18,16 @@ def read_file():
     part_file = '00.txt'
     total = 0
     count = 0
-    if True:
-        filename = part_file
-        with open(filename, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            for line in lines:
-                count += 1
-                src = line.strip('\n').lower()
-                data = tokenizer.encode_plus(src, src, max_length=maxlen)
-                size = len(data['input_ids'])
-                print('size', size)
-                if size <= maxlen:
-                    total += size
-                else:
-                    total += maxlen
+    filename = part_file
+    with open(filename, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+        for line in lines:
+            count += 1
+            src = line.strip('\n').lower()
+            data = tokenizer.encode_plus(src, src, max_length=maxlen)
+            size = len(data['input_ids'])
+            print('size', size)
+            total += min(size, maxlen)
     print(total, count, total*1.0/count)
 
 read_file()

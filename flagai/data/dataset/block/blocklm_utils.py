@@ -15,19 +15,13 @@ from scipy.stats import poisson
 def rindex(lst, val, start=None):
     if start is None:
         start = len(lst) - 1
-    for i in range(start, -1, -1):
-        if lst[i] == val:
-            return i
-    return -1
+    return next((i for i in range(start, -1, -1) if lst[i] == val), -1)
 
 
 def index_in_list(lst, val, start=None):
     if start is None:
         start = 0
-    for i in range(start, len(lst)):
-        if lst[i] == val:
-            return i
-    return -1
+    return next((i for i in range(start, len(lst)) if lst[i] == val), -1)
 
 
 class ConstructBlockStrategy:
@@ -115,11 +109,7 @@ class ConstructBlockStrategy:
             return True
         if '；' in tok:
             return True
-        if '…' in tok:
-            return True
-        if '\n' in tok:
-            return True
-        return False
+        return True if '…' in tok else '\n' in tok
 
     @staticmethod
     def sample_spans(span_lengths, total_length, rng, offset=0):
@@ -154,8 +144,8 @@ class ConstructBlockStrategy:
             last_index = index
         documents.sort(key=lambda x: x[1])
         for i, (offset, length) in enumerate(documents):
+            current_masked_length, current_count = 0, 0
             if i == len(documents) - 1:
-                current_masked_length, current_count = 0, 0
                 while mask_index + current_count < len(
                         masked_lengths
                 ) and masked_lengths[
@@ -176,7 +166,6 @@ class ConstructBlockStrategy:
                           masked_lengths[:mask_index], indices)
             else:
                 current_masked_total = int(length * self.bert_ratio)
-                current_masked_length, current_count = 0, 0
                 while mask_index + current_count < len(
                         masked_lengths
                 ) and masked_lengths[
@@ -250,12 +239,10 @@ class ConstructBlockStrategy:
                         span_tokens[sub_idx] = self.tokenizer.get_command_id(
                             'dBLOCK')
             target_tokens.append(span_tokens)
-            targets.append(tokens[start:end])
-            targets.append([self.tokenizer.get_command_id('eop')])
+            targets.extend((tokens[start:end], [self.tokenizer.get_command_id('eop')]))
             if not self.sentinel_token:
                 target_position_id = position_ids[start:end]
-                target_position_ids.append(target_position_id)
-                target_position_ids.append([target_position_id[0]])
+                target_position_ids.extend((target_position_id, [target_position_id[0]]))
             else:
                 target_position_ids.append([self.max_seq_length] *
                                            (end - start + 1))
@@ -276,10 +263,8 @@ class ConstructBlockStrategy:
                 mask_token = 'mask' if idx == 0 else f'MASK{idx}'
                 mask_id = self.tokenizer.get_command_id(mask_token)
             local_spans.append((current_length, current_length + start - last))
-            source_tokens.append(tokens[last:start])
-            source_tokens.append([mask_id])
-            source_position_ids.append(position_ids[last:start])
-            source_position_ids.append([position_ids[start]])
+            source_tokens.extend((tokens[last:start], [mask_id]))
+            source_position_ids.extend((position_ids[last:start], [position_ids[start]]))
             current_length += start - last + 1
             last = end
         if last < len(tokens):
@@ -295,9 +280,7 @@ class ConstructBlockStrategy:
             print("Found EOS in target", self.tokenizer.DecodeIds(tokens))
             raise RuntimeError
         if self.encoder_decoder:
-            target_tokens = target_tokens + [
-                self.tokenizer.get_command_id('eop')
-            ]
+            target_tokens += [self.tokenizer.get_command_id('eop')]
             loss_masks = np.ones(len(target_tokens), dtype=np.int64)
             return source_tokens, target_tokens, loss_masks
         else:
@@ -342,22 +325,20 @@ class ConstructBlockStrategy:
         block_spans = self.sample_span_in_document(tokens, masked_lengths, rng)
         if len(block_spans) < len(masked_lengths):
             return None
-        if self.masked_lm:
-            data = self.make_masked_data(tokens, loss_masks, attention_mask,
-                                         block_spans, rng)
-        else:
-            data = self.make_block_data(tokens,
-                                        loss_masks,
-                                        attention_mask,
-                                        block_spans,
-                                        rng,
-                                        task=task)
-        return data
+        return (
+            self.make_masked_data(
+                tokens, loss_masks, attention_mask, block_spans, rng
+            )
+            if self.masked_lm
+            else self.make_block_data(
+                tokens, loss_masks, attention_mask, block_spans, rng, task=task
+            )
+        )
 
     def split_samples(self, samples, rng):
         target_length = rng.randrange(32, self.max_seq_length - 1)
-        num_splits = (self.max_seq_length - 1) // target_length
         new_samples = []
+        num_splits = (self.max_seq_length - 1) // target_length
         cls_id = self.tokenizer.get_command_id('cls')
         eos_id = self.tokenizer.get_command_id('eos')
         for sample in samples:
@@ -369,15 +350,17 @@ class ConstructBlockStrategy:
                     random_start = rng.randrange(0,
                                                  len(tokens) - target_length)
                     while random_start > 0 and (
-                            tokens[random_start] == eos_id
-                            or not (self.contains_sentence_end(
-                                tokens[random_start - 1])
-                                    or tokens[random_start - 1] == eos_id)):
+                        tokens[random_start] == eos_id
+                        or not self.contains_sentence_end(tokens[random_start - 1])
+                        and tokens[random_start - 1] != eos_id
+                    ):
                         random_start -= 1
                     random_end = random_start + target_length
-                    while random_end > random_start and not (
-                            self.contains_sentence_end(tokens[random_end - 1])
-                            or tokens[random_end - 1] == eos_id):
+                    while (
+                        random_end > random_start
+                        and not self.contains_sentence_end(tokens[random_end - 1])
+                        and tokens[random_end - 1] != eos_id
+                    ):
                         random_end -= 1
                     if random_end - random_start < target_length // 2:
                         random_end = random_start + target_length
@@ -561,19 +544,18 @@ class ConstructBlockStrategy:
                 'target': torch.tensor(target_batch, dtype=torch.long),
                 'loss_mask': torch.tensor(loss_mask_batch, dtype=torch.long)
             }
-        else:
-            token_batch, target_batch, loss_mask_batch, position_id_batch = self.pad_batch(
-                token_batch, target_batch, loss_mask_batch, position_id_batch)
-            return {
-                'text': torch.tensor(token_batch, dtype=torch.long),
-                'target': torch.tensor(target_batch, dtype=torch.long),
-                'loss_mask': torch.tensor(loss_mask_batch, dtype=torch.long),
-                'position_id': torch.tensor(position_id_batch,
-                                            dtype=torch.long),
-                'attention_mask': torch.tensor(attention_mask,
-                                               dtype=torch.long),
-                'mode': mode
-            }
+        token_batch, target_batch, loss_mask_batch, position_id_batch = self.pad_batch(
+            token_batch, target_batch, loss_mask_batch, position_id_batch)
+        return {
+            'text': torch.tensor(token_batch, dtype=torch.long),
+            'target': torch.tensor(target_batch, dtype=torch.long),
+            'loss_mask': torch.tensor(loss_mask_batch, dtype=torch.long),
+            'position_id': torch.tensor(position_id_batch,
+                                        dtype=torch.long),
+            'attention_mask': torch.tensor(attention_mask,
+                                           dtype=torch.long),
+            'mode': mode
+        }
 
     @staticmethod
     def pad_batch(token_batch, target_batch, loss_mask_batch,

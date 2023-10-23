@@ -66,7 +66,7 @@ def initialize_distributed():
     # Call the init process
     init_method = 'tcp://'
 
-    init_method += master_addr + ':' + master_port
+    init_method += f'{master_addr}:{master_port}'
     torch.distributed.init_process_group(
         backend='nccl',  # gloo
         world_size=world_size,
@@ -87,7 +87,7 @@ while get_current_rank() != local_rank:
 while get_current_pool() == 0:
     time.sleep(10)
 set_current_pool(get_current_pool()-1)
-print("loading rank {}".format(local_rank))
+print(f"loading rank {local_rank}")
 set_current_rank(local_rank + 1)
 
 model = OPTModel.init_from_json('/mnt/models_xingzhaohu/opt-66b-en/config.json')
@@ -97,9 +97,9 @@ model.eval()
 model.to(device)
 model.load_weights(checkpoint_path)
 
-print("loading rank {} finished".format(local_rank))
+print(f"loading rank {local_rank} finished")
 set_current_pool(get_current_pool()+1)
-print('current rank setting is {}'.format(get_current_pool()))
+print(f'current rank setting is {get_current_pool()}')
 
 torch.distributed.barrier(group=mpu.get_model_parallel_group())
 text = """I think The Old Man and the Sea is a very good book, what do you think? I think """

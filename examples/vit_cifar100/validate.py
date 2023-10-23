@@ -18,8 +18,9 @@ def build_cifar():
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    test_dataset = CIFAR100(root="./cifar100", train=False, download=True, transform=transform_test)
-    return test_dataset
+    return CIFAR100(
+        root="./cifar100", train=False, download=True, transform=transform_test
+    )
 
 def collate_fn(batch):
     images = torch.stack([b[0] for b in batch])
@@ -44,7 +45,7 @@ if __name__ == '__main__':
     model = loader.get_model()
 
     model.load_state_dict(torch.load(os.path.join(model_save_dir, "19000", "pytorch_model.bin"), map_location=device)["module"])
-    print(f"model load success.......")
+    print("model load success.......")
     model.to(device)
 
     val_dataset = build_cifar()
